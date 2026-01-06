@@ -36,5 +36,6 @@
     },
     "recent_packs": [
         "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
-    ]
+    ],
+    "last_preset_import_dir": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs"
 }

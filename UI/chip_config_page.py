@@ -12,7 +12,8 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QHeaderView,
-    QTableWidget, QTableWidgetItem, QFileDialog, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QFileDialog, QAbstractItemView,
+    QDialog, QDialogButtonBox
 )
 
 from qfluentwidgets import (
@@ -28,15 +29,16 @@ from Core.chip_config import ChipConfigManager, ChipConfig, BUILTIN_PRESETS, get
 LOG = logging.getLogger(__name__)
 
 
-class EditPresetDialog(Dialog):
+class EditPresetDialog(QDialog):
     """Dialog for editing/creating chip preset"""
     
     def __init__(self, config: Optional[ChipConfig] = None, parent=None):
+        super().__init__(parent)
         self._config = config
         self._is_new = config is None
         
         title = "新建芯片预设" if self._is_new else f"编辑预设: {config.name}"
-        super().__init__(title, "", parent)
+        self.setWindowTitle(title)
         
         self._init_content()
         
@@ -136,8 +138,22 @@ class EditPresetDialog(Dialog):
         notes_row.addWidget(self.notes_edit)
         layout.addLayout(notes_row)
         
-        # Add to dialog
-        self.viewLayout.addLayout(layout)
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        
+        self.cancel_btn = PushButton("取消")
+        self.cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(self.cancel_btn)
+        
+        self.ok_btn = PushButton("确定", icon=FluentIcon.ACCEPT)
+        self.ok_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self.ok_btn)
+        
+        layout.addLayout(btn_row)
+        
+        # Set layout
+        self.setLayout(layout)
         
         # Default width
         self.setMinimumWidth(600)
