@@ -145,8 +145,25 @@ class PyOCDWrapper:
         connect_mode: ConnectMode = ConnectMode.UNDER_RESET,
         pack_path: Optional[str] = None,
     ) -> bool:
-        """Connect to target device"""
-        # Don't use lock here - allow cancellation
+        """
+        Connect to target device.
+        
+        Note: Uses a separate lock for connection state to allow cancellation
+        while preventing concurrent connect/disconnect operations.
+        """
+        # Use lock to prevent concurrent connect/disconnect
+        with self._lock:
+            return self._connect_internal(target, probe_id, frequency, connect_mode, pack_path)
+    
+    def _connect_internal(
+        self,
+        target: str,
+        probe_id: Optional[str] = None,
+        frequency: int = 1000000,
+        connect_mode: ConnectMode = ConnectMode.UNDER_RESET,
+        pack_path: Optional[str] = None,
+    ) -> bool:
+        """Internal connect implementation - must be called with lock held"""
         start_time = time.time()
         
         # Build equivalent command line for logging

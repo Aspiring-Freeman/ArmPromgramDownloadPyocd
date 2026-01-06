@@ -66,6 +66,18 @@ class ChipConfig:
     
     @classmethod
     def from_dict(cls, data: dict) -> 'ChipConfig':
+        """
+        Create ChipConfig from dictionary with validation.
+        
+        Args:
+            data: Dictionary with chip configuration
+            
+        Returns:
+            ChipConfig instance
+            
+        Raises:
+            ValueError: If required fields are missing or invalid
+        """
         # Handle older configs without all fields
         defaults = {
             'name': 'Unknown',
@@ -85,6 +97,46 @@ class ChipConfig:
             'notes': ''
         }
         defaults.update(data)
+        
+        # Validate required fields
+        if not defaults.get('target'):
+            raise ValueError("'target' field is required and cannot be empty")
+        
+        # Validate and normalize flash_start
+        flash_start = defaults.get('flash_start', 0x08000000)
+        if isinstance(flash_start, str):
+            try:
+                flash_start = int(flash_start, 16) if flash_start.lower().startswith('0x') else int(flash_start)
+            except ValueError:
+                raise ValueError(f"Invalid flash_start address: {flash_start}")
+        if not (0x00000000 <= flash_start <= 0xFFFFFFFF):
+            raise ValueError(f"flash_start out of range: 0x{flash_start:08X}")
+        defaults['flash_start'] = flash_start
+        
+        # Validate and normalize ram_start
+        ram_start = defaults.get('ram_start', 0x20000000)
+        if isinstance(ram_start, str):
+            try:
+                ram_start = int(ram_start, 16) if ram_start.lower().startswith('0x') else int(ram_start)
+            except ValueError:
+                raise ValueError(f"Invalid ram_start address: {ram_start}")
+        defaults['ram_start'] = ram_start
+        
+        # Validate frequency
+        freq = defaults.get('default_frequency', 1000000)
+        if isinstance(freq, str):
+            freq = int(freq)
+        if not (10000 <= freq <= 50000000):  # 10kHz to 50MHz
+            LOG.warning(f"Frequency {freq} out of typical range, using default")
+            freq = 1000000
+        defaults['default_frequency'] = freq
+        
+        # Validate connect_mode
+        valid_modes = ['halt', 'pre-reset', 'under-reset', 'attach']
+        if defaults.get('connect_mode') not in valid_modes:
+            LOG.warning(f"Invalid connect_mode '{defaults.get('connect_mode')}', using 'under-reset'")
+            defaults['connect_mode'] = 'under-reset'
+        
         # Only pass fields that exist in the dataclass
         valid_fields = {k: v for k, v in defaults.items() if k in cls.__dataclass_fields__}
         return cls(**valid_fields)

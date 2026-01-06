@@ -21,7 +21,7 @@ LOG = logging.getLogger(__name__)
 
 
 class EraseWorker(QThread):
-    """Background erase worker"""
+    """Background erase worker with cooperative cancellation"""
     progress = pyqtSignal(float)
     status = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
@@ -34,11 +34,26 @@ class EraseWorker(QThread):
         self._end_addr = end_addr
         self._sector = sector
         self._reset_after = reset_after
+        self._cancelled = False
+        
+    def cancel(self):
+        """Request cancellation - cooperative, not forced"""
+        self._cancelled = True
+        
+    def is_cancelled(self) -> bool:
+        return self._cancelled
         
     def run(self):
         try:
+            if self._cancelled:
+                self.finished.emit(False, "已取消")
+                return
+                
             def on_progress(p):
+                if self._cancelled:
+                    return False  # Signal to stop
                 self.progress.emit(p)
+                return True
                 
             if self._mode == "chip":
                 self.status.emit("正在全片擦除...")
@@ -51,6 +66,10 @@ class EraseWorker(QThread):
                 success = self._wrapper.erase_range(self._start_addr, self._end_addr, progress_callback=on_progress)
             else:
                 self.finished.emit(False, "无效的擦除参数")
+                return
+            
+            if self._cancelled:
+                self.finished.emit(False, "已取消")
                 return
                 
             if success and self._reset_after:
@@ -245,8 +264,13 @@ class ErasePage(QWidget):
         
     def _cancel_erase(self):
         if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._worker.wait()
+            self._worker.cancel()  # Request cooperative cancellation
+            self._worker.wait(3000)  # Wait up to 3 seconds
+            if self._worker.isRunning():
+                # Only terminate as last resort
+                LOG.warning("Worker did not respond to cancel, forcing termination")
+                self._worker.terminate()
+                self._worker.wait()
             self._on_finished(False, "已取消")
             
     def _on_progress(self, value):

@@ -23,7 +23,7 @@ LOG = logging.getLogger(__name__)
 
 
 class FlashWorker(QThread):
-    """Background flash worker"""
+    """Background flash worker with cooperative cancellation"""
     progress = pyqtSignal(float)
     status = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
@@ -35,13 +35,28 @@ class FlashWorker(QThread):
         self._address = address
         self._verify = verify
         self._reset_after = reset_after
+        self._cancelled = False
+        
+    def cancel(self):
+        """Request cancellation - cooperative, not forced"""
+        self._cancelled = True
+        
+    def is_cancelled(self) -> bool:
+        return self._cancelled
         
     def run(self):
         try:
+            if self._cancelled:
+                self.finished.emit(False, "已取消")
+                return
+                
             self.status.emit(f"正在烧录: {os.path.basename(self._file_path)}")
             
             def on_progress(p):
+                if self._cancelled:
+                    return False  # Signal to stop
                 self.progress.emit(p)
+                return True
                 
             success = self._wrapper.flash_file(
                 self._file_path,
@@ -49,6 +64,10 @@ class FlashWorker(QThread):
                 verify=self._verify,
                 progress_callback=on_progress
             )
+            
+            if self._cancelled:
+                self.finished.emit(False, "已取消")
+                return
             
             if success and self._reset_after:
                 self.status.emit("烧录完成，正在复位...")
@@ -207,7 +226,7 @@ class FlashPage(QWidget):
         if path and os.path.exists(path):
             size = os.path.getsize(path)
             ext = os.path.splitext(path)[1].lower()
-            type_name = {"hex": "Intel HEX", ".bin": "Binary", ".elf": "ELF"}.get(ext, "Unknown")
+            type_name = {".hex": "Intel HEX", ".bin": "Binary", ".elf": "ELF"}.get(ext, "Unknown")
             self.file_info.setText(f"{type_name} - {size:,} 字节")
             self.flash_btn.setEnabled(self._connected)
         else:
@@ -259,8 +278,13 @@ class FlashPage(QWidget):
         
     def _cancel_flash(self):
         if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._worker.wait()
+            self._worker.cancel()  # Request cooperative cancellation
+            self._worker.wait(3000)  # Wait up to 3 seconds
+            if self._worker.isRunning():
+                # Only terminate as last resort
+                LOG.warning("Worker did not respond to cancel, forcing termination")
+                self._worker.terminate()
+                self._worker.wait()
             self._on_finished(False, "已取消")
             
     def _on_progress(self, value):

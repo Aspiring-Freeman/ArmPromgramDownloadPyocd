@@ -30,15 +30,24 @@ class CommandLogger:
     """
     Logger that formats operations like command-line PyOCD output.
     Shows equivalent command and detailed results.
+    
+    Thread-safe singleton implementation.
     """
     
     _instance: Optional['CommandLogger'] = None
-    _callbacks: List[Callable[[str], None]] = []
+    _lock = None  # Will be set on first instantiation
     
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._callbacks = []
+            import threading
+            if cls._lock is None:
+                cls._lock = threading.Lock()
+            with cls._lock:
+                # Double-check locking pattern
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    # Instance variables, not class variables
+                    cls._instance._callbacks = []
         return cls._instance
     
     @classmethod

@@ -5,7 +5,7 @@
         "language": "zh_CN"
     },
     "pyocd": {
-        "default_frequency": 10000000,
+        "default_frequency": 4000000,
         "connect_mode": "under-reset",
         "last_target": "stm32h503cbtx",
         "last_pack": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
