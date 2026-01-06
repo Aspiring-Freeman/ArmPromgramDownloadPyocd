@@ -1,0 +1,17 @@
+{
+  "name": "STM32H503CBTX Custom",
+  "vendor": "STMicroelectronics",
+  "chip_family": "stm32h50",
+  "target": "stm32h503cbtx",
+  "flash_start": 134217728,
+  "flash_size": 0,
+  "ram_start": 536870912,
+  "ram_size": 0,
+  "default_frequency": 10000000,
+  "connect_mode": "under-reset",
+  "reset_type": "default",
+  "pack_file": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack",
+  "options": {},
+  "description": "PwmSimulator Project",
+  "notes": ""
+}

@@ -1,0 +1,17 @@
+{
+    "name": "STM32H503 开发板",
+    "vendor": "STMicroelectronics",
+    "chip_family": "STM32H5",
+    "target": "stm32h503cbtx",
+    "flash_start": 134217728,
+    "flash_size": 131072,
+    "ram_start": 536870912,
+    "ram_size": 32768,
+    "default_frequency": 1000000,
+    "connect_mode": "under-reset",
+    "reset_type": "default",
+    "pack_file": "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack",
+    "options": {},
+    "description": "STM32H503CBT6 Cortex-M33 开发板",
+    "notes": "需要加载 STM32H5 CMSIS-Pack"
+}

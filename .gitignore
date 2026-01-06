@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Config (keep template, ignore local)
+# config.json  # Uncomment if you don't want to track config
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# PyOCD virtual env inside Driver (but keep pyocd source)
+Driver/pyOCD/arm_cmsis_pyocd_platform/
+
+# User chip configs (keep directory structure)
+# Doc/ChipConfigs/*.json
+
+# Hex files in user directories (optional)
+# Mcu_Hex_Directories/*.hex
+# Mcu_Hex_Directories/*.bin
