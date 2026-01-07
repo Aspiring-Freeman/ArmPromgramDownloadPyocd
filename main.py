@@ -15,14 +15,129 @@ import sys
 import os
 import logging
 from pathlib import Path
+from typing import Tuple, Optional
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
-# Add local pyocd to path FIRST (use workspace's pyocd, not pip installed)
+# Local PyOCD path
 LOCAL_PYOCD_PATH = PROJECT_ROOT / "Driver" / "pyOCD"
-if LOCAL_PYOCD_PATH.exists():
-    sys.path.insert(0, str(LOCAL_PYOCD_PATH))
+
+# Minimum required versions for dependencies
+MIN_VERSIONS = {
+    "PyQt6": (6, 4, 0),
+    "qfluentwidgets": (1, 4, 0),
+}
+
+
+def parse_version(version_str: str) -> Tuple[int, ...]:
+    """Parse version string to tuple of integers"""
+    try:
+        # Handle versions like "1.4.0", "6.4.2", "1.4.0.post1"
+        parts = version_str.split('.')
+        result = []
+        for part in parts[:3]:  # Only take first 3 parts
+            # Remove any non-numeric suffix
+            num = ''.join(c for c in part if c.isdigit())
+            if num:
+                result.append(int(num))
+        return tuple(result) if result else (0, 0, 0)
+    except Exception:
+        return (0, 0, 0)
+
+
+def check_dependencies() -> bool:
+    """
+    Check if required dependencies are installed with compatible versions.
+    
+    Returns:
+        True if all dependencies are satisfied, False otherwise
+    """
+    all_ok = True
+    
+    # Check PyQt6
+    try:
+        from PyQt6.QtCore import PYQT_VERSION_STR
+        version = parse_version(PYQT_VERSION_STR)
+        min_ver = MIN_VERSIONS["PyQt6"]
+        if version < min_ver:
+            print(f"⚠️  PyQt6 version {PYQT_VERSION_STR} is below minimum {'.'.join(map(str, min_ver))}")
+            all_ok = False
+    except ImportError:
+        print("❌ PyQt6 is not installed. Please install: pip install PyQt6>=6.4.0")
+        return False
+    
+    # Check qfluentwidgets
+    try:
+        import qfluentwidgets
+        version_str = getattr(qfluentwidgets, '__version__', '0.0.0')
+        version = parse_version(version_str)
+        min_ver = MIN_VERSIONS["qfluentwidgets"]
+        if version < min_ver:
+            print(f"⚠️  qfluentwidgets version {version_str} is below minimum {'.'.join(map(str, min_ver))}")
+            print("   Some UI features may not work correctly.")
+            print("   Recommended: pip install qfluentwidgets>=1.4.0")
+            # Don't fail, just warn - older versions may still work
+    except ImportError:
+        print("❌ qfluentwidgets is not installed. Please install: pip install qfluentwidgets>=1.4.0")
+        return False
+    
+    return all_ok
+
+
+def check_pyocd_submodule() -> bool:
+    """
+    Check if local PyOCD submodule is properly initialized.
+    
+    Returns:
+        True if PyOCD is available (local or fallback), False if neither works
+    """
+    # Check for essential PyOCD files
+    pyocd_init = LOCAL_PYOCD_PATH / "pyocd" / "__init__.py"
+    pyocd_main = LOCAL_PYOCD_PATH / "pyocd" / "__main__.py"
+    
+    if LOCAL_PYOCD_PATH.exists() and pyocd_init.exists() and pyocd_main.exists():
+        # Local PyOCD is available
+        sys.path.insert(0, str(LOCAL_PYOCD_PATH))
+        return True
+    
+    # Local PyOCD not available, print warning
+    print("=" * 70)
+    print("⚠️  WARNING: Local PyOCD submodule not found or incomplete!")
+    print("=" * 70)
+    print(f"\nExpected location: {LOCAL_PYOCD_PATH}")
+    print("\nThis project uses a local PyOCD version for consistency.")
+    print("Please initialize the submodule with:")
+    print("\n    git submodule update --init --recursive")
+    print("\nOr clone with submodules:")
+    print("\n    git clone --recurse-submodules <repository-url>")
+    print("\n" + "=" * 70)
+    
+    # Try to fall back to pip-installed pyocd
+    try:
+        import pyocd
+        print("\n✓ Fallback: Using pip-installed PyOCD instead.")
+        print(f"  Version: {getattr(pyocd, '__version__', 'unknown')}")
+        print("  Note: For best compatibility, please initialize the local submodule.\n")
+        return True
+    except ImportError:
+        print("\n✗ Error: No PyOCD installation found!")
+        print("  Please either:")
+        print("    1. Initialize the submodule: git submodule update --init --recursive")
+        print("    2. Install PyOCD via pip: pip install pyocd")
+        print("")
+        return False
+
+
+# Check PyOCD availability before proceeding
+if not check_pyocd_submodule():
+    print("Cannot start application without PyOCD. Exiting.")
+    sys.exit(1)
+
+# Check other dependencies
+if not check_dependencies():
+    print("Missing required dependencies. Exiting.")
+    sys.exit(1)
 
 # Add project root for Core and UI modules
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -38,7 +153,7 @@ from PyQt6.QtGui import QFont
 from qfluentwidgets import FluentTranslator
 
 from Core.pyocd_wrapper import PyOCDWrapper
-from Core.config import ConfigManager
+from Core.config import ConfigManager, get_config_path
 from Core.logger import setup_logger
 from UI.main_window import MainWindow
 
@@ -85,7 +200,8 @@ def main():
     app.setFont(font)
     
     # Load configuration
-    config_path = PROJECT_ROOT / "config.json"
+    # Use portable mode (config in project dir) if writable, otherwise use user config dir
+    config_path = get_config_path(PROJECT_ROOT)
     config = ConfigManager(str(config_path))
     
     # Setup logging

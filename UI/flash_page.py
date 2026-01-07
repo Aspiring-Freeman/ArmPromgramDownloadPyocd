@@ -299,11 +299,11 @@ class FlashPage(QWidget):
         self.flash_btn.setEnabled(self._connected)
         self.cancel_btn.setEnabled(False)
         
-        if success:
-            InfoBar.success("成功", message, position=InfoBarPosition.TOP_RIGHT, parent=self.window())
-        else:
-            InfoBar.error("失败", message, position=InfoBarPosition.TOP_RIGHT, parent=self.window())
-            
+        # Only show error notification - success is handled by StateToolTip
+        if not success:
+            InfoBar.error("失败", message, position=InfoBarPosition.TOP_RIGHT, 
+                         parent=self.window(), duration=5000)
+        
         self.log_message.emit(message)
         self.operation_finished.emit(success, message)
         
@@ -336,7 +336,7 @@ class FlashPage(QWidget):
     
     def apply_chip_config(self, chip_config: ChipConfig):
         """Apply chip configuration - set flash address"""
-        if chip_config and chip_config.flash_start:
+        if chip_config and chip_config.flash_start is not None:
             self.addr_edit.setText(f"0x{chip_config.flash_start:08X}")
             self.addr_auto.setChecked(False)
             self.log_message.emit(f"已设置起始地址: 0x{chip_config.flash_start:08X} ({chip_config.name})")

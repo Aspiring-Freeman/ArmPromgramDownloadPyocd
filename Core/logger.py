@@ -68,10 +68,11 @@ class CommandLogger:
     
     def _emit(self, message: str):
         """Emit message to all callbacks"""
-        for callback in self._callbacks:
+        callbacks = self._callbacks.copy()  # Thread-safe: copy list before iteration
+        for callback in callbacks:
             try:
                 callback(message)
-            except:
+            except Exception:
                 pass
     
     def log(self, message: str):

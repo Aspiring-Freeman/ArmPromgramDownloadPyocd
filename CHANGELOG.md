@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-06
+
+### Added
+- Unit tests for core modules (83 tests, 100% pass rate)
+  - `test_chip_config.py` - Chip configuration tests
+  - `test_config.py` - Application config tests
+  - `test_utils.py` - Utility function tests
+- Dependency version checking at startup (PyQt6, qfluentwidgets)
+- User config directory support for packaged applications
+  - Windows: `%APPDATA%/ArmFlashTool`
+  - macOS: `~/Library/Application Support/ArmFlashTool`
+  - Linux: `~/.config/ArmFlashTool`
+- Editable vendor combo box for custom chip vendors
+
+### Changed
+- Preset auto-apply when selected (no need to click "Apply" button)
+- Improved notification system - single notification per operation
+- Force disconnect with timeout for graceful shutdown
+
+### Fixed
+- Fixed bare `except:` statements for proper exception handling
+- Fixed thread safety in CommandLogger (`_callbacks.copy()`)
+- Fixed `flash_start = 0x00000000` not being applied (was treated as False)
+- Fixed duplicate notifications on flash/erase operations
+- Fixed preset not applying to probe page from chip config page
+- Fixed program hang on Ctrl+C during connection
+- Fixed spelling: `Package/Unkown` → `Package/Unknown`
+
+### Improved
+- Enhanced `.gitignore` (added Backup/, Mcu_Hex_Directories/, *.hex, *.bin, *.elf)
+- Better error notifications (only show InfoBar on failure, StateToolTip on success)
+- More robust shutdown sequence in closeEvent
+
 ## [1.0.0] - 2026-01-06
 
 ### Added

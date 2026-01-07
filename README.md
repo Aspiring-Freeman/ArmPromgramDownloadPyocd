@@ -54,9 +54,12 @@
 #### 安装依赖
 
 ```bash
-# 克隆仓库
-git clone https://github.com/Aspiring-Freeman/ArmPromgramDownloadPyocd.git
+# 克隆仓库 (推荐：使用 --recurse-submodules 初始化 PyOCD 子模块)
+git clone --recurse-submodules https://github.com/Aspiring-Freeman/ArmPromgramDownloadPyocd.git
 cd ArmPromgramDownloadPyocd
+
+# 如果已经克隆但没有初始化子模块，运行:
+git submodule update --init --recursive
 
 # 创建虚拟环境
 python3 -m venv venv
@@ -66,6 +69,9 @@ source venv/bin/activate  # Linux/macOS
 # 安装依赖
 pip install -r requirements.txt
 ```
+
+> ⚠️ **重要**: 本项目使用本地 `Driver/pyOCD` 目录下的 PyOCD 版本以确保兼容性。
+> 如果子模块未正确初始化，程序会尝试回退到 pip 安装的 PyOCD，但可能存在兼容性问题。
 
 #### 配置 udev 规则 (仅 Linux)
 
@@ -79,6 +85,19 @@ sudo ./udev/install_udev_rules.sh
 python main.py
 # 或
 ./run.sh
+```
+
+### 🧪 运行测试
+
+```bash
+# 激活虚拟环境后运行所有测试
+pytest
+
+# 运行带覆盖率的测试
+pytest --cov=Core --cov-report=html
+
+# 运行特定测试文件
+pytest tests/test_utils.py -v
 ```
 
 ### 📁 项目结构
@@ -96,7 +115,12 @@ ArmPromgramDownloadPyocd/
 │   ├── flash_page.py       # 烧录页面
 │   ├── erase_page.py       # 擦除页面
 │   └── settings_page.py    # 设置页面
-├── Driver/pyOCD/           # 本地 PyOCD (v0.36.0)
+├── tests/                  # 单元测试
+│   ├── conftest.py         # pytest 配置和 fixtures
+│   ├── test_utils.py       # utils 模块测试
+│   ├── test_chip_config.py # 芯片配置测试
+│   └── test_config.py      # 应用配置测试
+├── Driver/pyOCD/           # 本地 PyOCD (Git 子模块)
 ├── Package/                # CMSIS-Pack 文件
 │   └── Vendor/             # 按厂商分类
 ├── Doc/ChipConfigs/        # 芯片预设配置
@@ -158,9 +182,12 @@ PyOCD 使用 Apache 2.0 许可证。
 ### 🚀 Quick Start
 
 ```bash
-# Clone repository
-git clone https://github.com/Aspiring-Freeman/ArmPromgramDownloadPyocd.git
+# Clone repository with submodules (recommended)
+git clone --recurse-submodules https://github.com/Aspiring-Freeman/ArmPromgramDownloadPyocd.git
 cd ArmPromgramDownloadPyocd
+
+# If already cloned without submodules:
+git submodule update --init --recursive
 
 # Create virtual environment
 python3 -m venv venv
@@ -169,9 +196,15 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run
+# Run tests (optional)
+pytest
+
+# Run application
 python main.py
 ```
+
+> ⚠️ **Note**: This project uses a local PyOCD version from `Driver/pyOCD` for compatibility.
+> If the submodule is not initialized, it will fall back to pip-installed PyOCD.
 
 ### 📝 License
 

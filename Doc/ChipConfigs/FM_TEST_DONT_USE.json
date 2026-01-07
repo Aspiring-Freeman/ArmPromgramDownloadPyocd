@@ -1,0 +1,17 @@
+{
+  "name": "FM_TEST_DONT_USE",
+  "vendor": "Unknown",
+  "chip_family": "FM",
+  "target": "s",
+  "flash_start": 0,
+  "flash_size": 0,
+  "ram_start": 536870912,
+  "ram_size": 0,
+  "default_frequency": 100000,
+  "connect_mode": "under-reset",
+  "reset_type": "default",
+  "pack_file": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack",
+  "options": {},
+  "description": "",
+  "notes": ""
+}

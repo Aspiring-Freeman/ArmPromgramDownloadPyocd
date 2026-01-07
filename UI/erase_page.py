@@ -285,10 +285,10 @@ class ErasePage(QWidget):
         self.erase_btn.setEnabled(self._connected)
         self.cancel_btn.setEnabled(False)
         
-        if success:
-            InfoBar.success("成功", message, position=InfoBarPosition.TOP_RIGHT, parent=self.window())
-        else:
-            InfoBar.error("失败", message, position=InfoBarPosition.TOP_RIGHT, parent=self.window())
-            
+        # Only show error notification - success is handled by StateToolTip
+        if not success:
+            InfoBar.error("失败", message, position=InfoBarPosition.TOP_RIGHT,
+                         parent=self.window(), duration=5000)
+        
         self.log_message.emit(message)
         self.operation_finished.emit(success, message)

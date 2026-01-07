@@ -2,14 +2,71 @@
 # -*- coding: utf-8 -*-
 """
 Configuration Manager
+
+Supports both portable mode (config in project directory) and
+installed mode (config in user's app data directory).
 """
 
 import json
 import logging
+import platform
 from typing import Any, Dict, List
 from pathlib import Path
 
 LOG = logging.getLogger(__name__)
+
+
+def get_user_config_dir() -> Path:
+    """
+    Get user-specific configuration directory.
+    
+    Returns platform-appropriate config directory:
+    - Windows: %APPDATA%/ArmFlashTool
+    - macOS: ~/Library/Application Support/ArmFlashTool
+    - Linux: ~/.config/ArmFlashTool
+    """
+    system = platform.system()
+    
+    if system == "Windows":
+        base = Path.home() / "AppData" / "Roaming"
+    elif system == "Darwin":  # macOS
+        base = Path.home() / "Library" / "Application Support"
+    else:  # Linux and others
+        base = Path.home() / ".config"
+    
+    config_dir = base / "ArmFlashTool"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
+def get_config_path(project_root: Path = None, portable: bool = None) -> Path:
+    """
+    Determine the configuration file path.
+    
+    Args:
+        project_root: Project root directory for portable mode
+        portable: Force portable mode if True, user dir if False, auto-detect if None
+    
+    Returns:
+        Path to config.json
+    """
+    if portable is None:
+        # Auto-detect: use portable mode if project directory is writable
+        if project_root:
+            test_file = project_root / ".write_test"
+            try:
+                test_file.touch()
+                test_file.unlink()
+                portable = True
+            except (PermissionError, OSError):
+                portable = False
+        else:
+            portable = False
+    
+    if portable and project_root:
+        return project_root / "config.json"
+    else:
+        return get_user_config_dir() / "config.json"
 
 
 class ConfigManager:

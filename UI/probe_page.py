@@ -64,8 +64,8 @@ class ConnectWorker(QThread):
         self._cancelled = True
         # Force disconnect to interrupt any blocking operation
         try:
-            self._wrapper.disconnect()
-        except:
+            self._wrapper.disconnect(force=True)
+        except Exception:
             pass
         
     def run(self):
@@ -412,7 +412,7 @@ class ProbePage(QWidget):
         self._update_preset_combo()
     
     def _on_preset_changed(self, text: str):
-        """Handle preset selection change - show info"""
+        """Handle preset selection change - show info and auto-apply"""
         if not text or text.startswith("--"):
             self.preset_info.setText("")
             self._current_chip_config = None
@@ -442,6 +442,9 @@ class ProbePage(QWidget):
             if config.notes:
                 info_parts.append(f"备注: {config.notes}")
             self.preset_info.setText(" | ".join(info_parts))
+            
+            # Auto-apply preset when selected
+            self._apply_preset()
     
     def _apply_preset(self):
         """Apply selected preset to current settings"""
@@ -452,16 +455,32 @@ class ProbePage(QWidget):
         
         config = self._current_chip_config
         
-        # Apply target
+        # Apply target - first filter to find the target, then select it
+        target_found = False
         idx = self.target_combo.findText(config.target)
         if idx >= 0:
             self.target_combo.setCurrentIndex(idx)
+            target_found = True
         else:
-            # Target not in list, try to search
+            # Target not in current list, filter targets to find it
             self.target_search.setText(config.target)
+            # _filter_targets is called via signal, manually filter and update
+            filtered = [t for t in self._all_targets if config.target.lower() in t.lower()]
+            self._update_target_combo(filtered)
+            
+            # Now try to find exact match
             idx = self.target_combo.findText(config.target)
             if idx >= 0:
                 self.target_combo.setCurrentIndex(idx)
+                target_found = True
+            elif filtered:
+                # Select first match if exact match not found
+                self.target_combo.setCurrentIndex(0)
+                target_found = True
+        
+        if not target_found:
+            InfoBar.warning("提示", f"未找到目标芯片: {config.target}", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
         
         # Apply frequency
         freq_map = {100000: 0, 500000: 1, 1000000: 2, 2000000: 3, 4000000: 4, 8000000: 5, 10000000: 6}
@@ -483,6 +502,57 @@ class ProbePage(QWidget):
         self.log_message.emit(f"已应用预设: {config.name}")
         InfoBar.success("成功", f"已应用预设: {config.name}", parent=self.window(),
                        position=InfoBarPosition.TOP_RIGHT)
+    
+    def apply_chip_config(self, config, show_notification: bool = True):
+        """Apply chip config from external source (e.g., chip config page)
+        
+        Args:
+            config: ChipConfig to apply
+            show_notification: Whether to show success notification
+        """
+        if not config:
+            return
+        
+        self._current_chip_config = config
+        
+        # Apply target - first filter to find the target, then select it
+        target_found = False
+        idx = self.target_combo.findText(config.target)
+        if idx >= 0:
+            self.target_combo.setCurrentIndex(idx)
+            target_found = True
+        else:
+            # Target not in current list, filter targets to find it
+            self.target_search.setText(config.target)
+            filtered = [t for t in self._all_targets if config.target.lower() in t.lower()]
+            self._update_target_combo(filtered)
+            
+            idx = self.target_combo.findText(config.target)
+            if idx >= 0:
+                self.target_combo.setCurrentIndex(idx)
+                target_found = True
+            elif filtered:
+                self.target_combo.setCurrentIndex(0)
+                target_found = True
+        
+        # Apply frequency
+        freq_map = {100000: 0, 500000: 1, 1000000: 2, 2000000: 3, 4000000: 4, 8000000: 5, 10000000: 6}
+        freq_idx = freq_map.get(config.default_frequency, 2)
+        self.freq_combo.setCurrentIndex(freq_idx)
+        
+        # Apply connect mode
+        mode_map = {"under-reset": 0, "halt": 1, "pre-reset": 2, "attach": 3}
+        mode_idx = mode_map.get(config.connect_mode.lower(), 0)
+        self.mode_combo.setCurrentIndex(mode_idx)
+        
+        # Apply pack file if specified
+        if config.pack_file:
+            self.pack_edit.setText(config.pack_file)
+        
+        if show_notification:
+            self.log_message.emit(f"已应用配置: {config.name}")
+            InfoBar.success("成功", f"已应用配置: {config.name}", parent=self.window(),
+                           position=InfoBarPosition.TOP_RIGHT)
     
     def _save_current_as_preset(self):
         """Save current settings as a new preset with enhanced dialog"""

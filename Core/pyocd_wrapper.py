@@ -132,7 +132,7 @@ class PyOCDWrapper:
                     continue
                 if name not in targets:
                     targets.append(name)
-        except:
+        except Exception:
             pass
             
         return sorted(targets)
@@ -334,22 +334,40 @@ class PyOCDWrapper:
             if self._session:
                 try:
                     self._session.close()
-                except:
+                except Exception:
                     pass
             self._session = None
             return False
     
-    def disconnect(self):
-        """Disconnect from target"""
-        with self._lock:
-            if self._session:
-                try:
-                    self._session.close()
-                except Exception as e:
-                    LOG.warning(f"Disconnect error: {e}")
-                finally:
-                    self._session = None
-                    self._current_target = None
+    def disconnect(self, force: bool = False):
+        """Disconnect from target
+        
+        Args:
+            force: If True, skip lock acquisition (use during shutdown)
+        """
+        if force:
+            # Force disconnect without lock - used during shutdown
+            self._force_close_session()
+            return
+            
+        # Try to acquire lock with timeout to avoid hanging
+        acquired = self._lock.acquire(timeout=2.0)
+        try:
+            self._force_close_session()
+        finally:
+            if acquired:
+                self._lock.release()
+    
+    def _force_close_session(self):
+        """Close session without lock - internal use only"""
+        if self._session:
+            try:
+                self._session.close()
+            except Exception as e:
+                LOG.warning(f"Disconnect error: {e}")
+            finally:
+                self._session = None
+                self._current_target = None
     
     @property
     def is_connected(self) -> bool:

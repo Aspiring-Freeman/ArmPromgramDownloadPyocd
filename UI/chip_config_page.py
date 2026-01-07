@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 
 from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton, ToolButton,
-    LineEdit, ComboBox, TitleLabel, BodyLabel, CaptionLabel,
+    LineEdit, ComboBox, EditableComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, CheckBox, SpinBox,
     InfoBar, InfoBarPosition, SearchLineEdit, TableWidget,
     Dialog, MessageBox
@@ -60,11 +60,13 @@ class EditPresetDialog(QDialog):
         # Vendor
         vendor_row = QHBoxLayout()
         vendor_row.addWidget(BodyLabel("厂商:"))
-        self.vendor_combo = ComboBox()
+        self.vendor_combo = EditableComboBox()  # Use EditableComboBox for custom vendor input
         self.vendor_combo.addItems([
             "STMicroelectronics", "GigaDevice", "MindMotion", "NXP", "Nordic",
-            "Artery", "APM/Geehy", "WCH", "Microchip", "Infineon", "Nuvoton", "Unknown"
+            "Artery", "APM/Geehy", "WCH", "Microchip", "Infineon", "Nuvoton", 
+            "Renesas", "TI", "Holtek", "BYD", "Espressif", "Unknown"
         ])
+        self.vendor_combo.setPlaceholderText("选择或输入厂商名称")
         vendor_row.addWidget(self.vendor_combo)
         
         vendor_row.addWidget(BodyLabel("系列:"))
@@ -170,6 +172,9 @@ class EditPresetDialog(QDialog):
         idx = self.vendor_combo.findText(config.vendor)
         if idx >= 0:
             self.vendor_combo.setCurrentIndex(idx)
+        else:
+            # Custom vendor not in list, set as text directly
+            self.vendor_combo.setCurrentText(config.vendor)
         
         self.family_edit.setText(config.chip_family)
         self.target_edit.setText(config.target)
@@ -490,8 +495,8 @@ class ChipConfigPage(QWidget):
         config = self._chip_mgr.get_preset(key)
         if config:
             self.preset_selected.emit(config)
-            self.log_message.emit(f"已选择预设: {config.name}")
-            InfoBar.success("成功", f"已选择预设: {config.name}",
+            self.log_message.emit(f"已应用预设: {config.name}")
+            InfoBar.success("成功", f"已应用预设: {config.name}",
                           parent=self.window(), position=InfoBarPosition.TOP_RIGHT)
     
     def _import_presets(self):

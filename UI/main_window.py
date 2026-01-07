@@ -110,6 +110,10 @@ class MainWindow(FluentWindow):
     
     def _on_chip_config_applied(self, chip_config):
         """Handle chip config applied from probe page or chip config page"""
+        # Apply to probe page (sets target, frequency, mode, pack)
+        # Don't show notification here since the source page already shows one
+        if hasattr(self.probe_page, 'apply_chip_config'):
+            self.probe_page.apply_chip_config(chip_config, show_notification=False)
         # Apply to flash page (sets address)
         self.flash_page.apply_chip_config(chip_config)
         # Apply to erase page if needed
@@ -161,13 +165,11 @@ class MainWindow(FluentWindow):
             self._state_tooltip.setContent(msg)
             self._state_tooltip.setState(success)
             self._state_tooltip = None
-            
-        if success:
-            InfoBar.success("完成", msg, parent=self, position=InfoBarPosition.TOP_RIGHT)
-        else:
-            InfoBar.error("失败", msg, parent=self, position=InfoBarPosition.TOP_RIGHT, duration=5000)
-            
-            # Check if connection was lost (e.g., USB disconnect)
+        
+        # Note: InfoBar notifications are handled by individual pages (flash_page, erase_page)
+        # to avoid duplicate notifications
+        
+        if not success:
             if not self._wrapper.is_connected:
                 self._log("检测到连接已断开", "warning")
                 self._on_connection_changed(False)
@@ -179,6 +181,24 @@ class MainWindow(FluentWindow):
             
     def closeEvent(self, event):
         self._save_geometry()
-        self._wrapper.disconnect()
-        self.probe_page.stop_scanning()
+        
+        # Cancel any ongoing connection first
+        if hasattr(self.probe_page, '_cancel_connect'):
+            try:
+                self.probe_page._cancel_connect()
+            except Exception:
+                pass
+        
+        # Stop background scanning
+        try:
+            self.probe_page.stop_scanning()
+        except Exception:
+            pass
+        
+        # Force disconnect (skip lock acquisition during shutdown)
+        try:
+            self._wrapper.disconnect(force=True)
+        except Exception:
+            pass
+            
         event.accept()

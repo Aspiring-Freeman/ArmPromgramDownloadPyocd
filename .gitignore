@@ -55,6 +55,16 @@ Driver/pyOCD/arm_cmsis_pyocd_platform/
 # User chip configs (keep directory structure)
 # Doc/ChipConfigs/*.json
 
-# Hex files in user directories (optional)
-# Mcu_Hex_Directories/*.hex
-# Mcu_Hex_Directories/*.bin
+# Backup directory (user backups, not for version control)
+Backup/
+
+# User hex/bin files directories
+Mcu_Hex_Directories/
+*.hex
+*.bin
+*.elf
+*.axf
+
+# Build output
+output/
+release/
