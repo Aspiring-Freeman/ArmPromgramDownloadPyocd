@@ -1,0 +1,17 @@
+{
+  "name": "FM33LG04x_APP",
+  "vendor": "复旦微电子",
+  "chip_family": "fm33lg04",
+  "target": "fm33lg04x",
+  "flash_start": 16384,
+  "flash_size": 0,
+  "ram_start": 536870912,
+  "ram_size": 0,
+  "default_frequency": 10000000,
+  "connect_mode": "under-reset",
+  "reset_type": "default",
+  "pack_file": "Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack",
+  "options": {},
+  "description": "用户自定义预设 - stm32h503cbtx",
+  "notes": ""
+}

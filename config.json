@@ -7,37 +7,40 @@
     "pyocd": {
         "default_frequency": 10000000,
         "connect_mode": "under-reset",
-        "last_target": "stm32h503cbtx",
-        "last_pack": "D:/其他文件/EmbededSoftware/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
+        "last_target": "fm33lg04x",
+        "last_pack": "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
     },
     "ui": {
-        "theme": "light",
+        "theme": "dark",
         "accent_color": "#0078D4",
-        "window_width": 1536,
-        "window_height": 816,
+        "window_width": 1920,
+        "window_height": 1048,
         "window_x": 0,
-        "window_y": 0
+        "window_y": 32
     },
     "recent_files": [
-        "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Mcu_Hex_Directories/PwmSimulate/20260106/Simulate.hex"
+        "/home/noah/nextcloud_crunchbits/Work/QianFeng/Work/Software/Project/InProgress/2025/small_caliber_uwm_tester/build/SmallCaliberUWMTester.hex",
+        "Mcu_Hex_Directories/PwmSimulate/20260106/Simulate.hex"
     ],
     "recent_targets": [
+        "fm33lg04x",
         "stm32h503cbtx",
         "lpc55s69"
     ],
     "last_target": "",
     "last_probe": "",
     "settings": {
-        "theme": "light",
+        "theme": "dark",
         "default_frequency": 1000000,
         "connect_retries": 2,
-        "pack_directory": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM",
+        "pack_directory": "Package/Vendor",
         "default_verify": true,
         "default_reset": true,
-        "pyocd_path": "D:/其他文件/EmbededSoftware/ArmPromgramDownloadPyocd/Driver/pyOCD/pyocd"
+        "pyocd_path": "Driver/pyOCD"
     },
     "recent_packs": [
-        "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
+        "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
     ],
-    "last_preset_import_dir": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs"
+    "last_preset_import_dir": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs",
+    "last_preset_export_path": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs/FM33LG04X.json"
 }

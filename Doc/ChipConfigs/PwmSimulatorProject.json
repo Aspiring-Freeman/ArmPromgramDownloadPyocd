@@ -10,7 +10,7 @@
   "default_frequency": 10000000,
   "connect_mode": "under-reset",
   "reset_type": "default",
-  "pack_file": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack",
+  "pack_file": "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack",
   "options": {},
   "description": "PwmSimulator Project",
   "notes": ""

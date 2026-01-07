@@ -13,16 +13,17 @@ from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QFileDialog, QDialogButtonBox, QFormLayout, QLabel, QWidget
+    QFileDialog, QDialogButtonBox, QFormLayout, QWidget
 )
 
 from qfluentwidgets import (
-    LineEdit, ComboBox, BodyLabel, StrongBodyLabel,
+    LineEdit, ComboBox, EditableComboBox, BodyLabel, StrongBodyLabel,
     PushButton, FluentIcon, CheckBox, TextEdit,
-    InfoBar, InfoBarPosition, CardWidget
+    InfoBar, InfoBarPosition, CardWidget, isDarkTheme
 )
 
 from Core.config import config
+from Core.chip_config import to_relative_pack_path
 
 LOG = logging.getLogger(__name__)
 
@@ -46,11 +47,37 @@ class SavePresetDialog(QDialog):
         self.setMinimumWidth(750)
         self.setMinimumHeight(650 if not export_only else 550)
         
+        # Apply theme-aware styling
+        self._apply_theme_style()
+        
         self._init_ui()
         self._load_defaults()
         
         # Force layout recalculation for high DPI
         self.adjustSize()
+    
+    def _apply_theme_style(self):
+        """Apply theme-aware styling to the dialog"""
+        if isDarkTheme():
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #2d2d2d;
+                    color: #ffffff;
+                }
+                QLabel, BodyLabel {
+                    color: #ffffff;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #ffffff;
+                    color: #1a1a1a;
+                }
+                QLabel, BodyLabel {
+                    color: #1a1a1a;
+                }
+            """)
     
     def _get_project_root(self) -> Path:
         """Get project root directory"""
@@ -73,7 +100,7 @@ class SavePresetDialog(QDialog):
         def add_row(label_text, widget):
             row = QHBoxLayout()
             row.setSpacing(10)
-            lbl = QLabel(label_text)
+            lbl = BodyLabel(label_text)
             lbl.setMinimumWidth(75)
             lbl.setFixedHeight(36)
             lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -87,12 +114,13 @@ class SavePresetDialog(QDialog):
         self.name_edit.setPlaceholderText("例如: STM32H503 开发板")
         add_row("预设名称:", self.name_edit)
         
-        # Vendor
-        self.vendor_combo = ComboBox()
+        # Vendor - editable combo allows custom input
+        self.vendor_combo = EditableComboBox()
         self.vendor_combo.addItems([
-            "STMicroelectronics", "GigaDevice", "MindMotion", "NXP", "Nordic",
-            "Artery", "APM/Geehy", "WCH", "Microchip", "Infineon", "Nuvoton", "其他"
+            "STMicroelectronics", "GigaDevice", "MindMotion", "FMSH", "NXP", "Nordic",
+            "Artery", "APM/Geehy", "WCH", "Microchip", "Infineon", "Nuvoton"
         ])
+        self.vendor_combo.setPlaceholderText("输入或选择厂商")
         add_row("厂商:", self.vendor_combo)
         
         # Family
@@ -102,8 +130,7 @@ class SavePresetDialog(QDialog):
         
         # Target
         self.target_edit = LineEdit()
-        self.target_edit.setPlaceholderText("PyOCD 目标名称")
-        self.target_edit.setReadOnly(True)
+        self.target_edit.setPlaceholderText("PyOCD 目标名称 (例如: stm32h503cbtx)")
         add_row("目标芯片:", self.target_edit)
         
         # Memory section
@@ -112,7 +139,7 @@ class SavePresetDialog(QDialog):
         
         mem_row = QHBoxLayout()
         mem_row.setSpacing(10)
-        lbl_flash = QLabel("Flash起始:")
+        lbl_flash = BodyLabel("Flash起始:")
         lbl_flash.setMinimumWidth(75)
         lbl_flash.setFixedHeight(36)
         lbl_flash.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -122,7 +149,7 @@ class SavePresetDialog(QDialog):
         self.flash_edit.setMaximumWidth(130)
         self.flash_edit.setFixedHeight(36)
         mem_row.addWidget(self.flash_edit)
-        lbl_ram = QLabel("RAM起始:")
+        lbl_ram = BodyLabel("RAM起始:")
         lbl_ram.setFixedHeight(36)
         lbl_ram.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         mem_row.addWidget(lbl_ram)
@@ -140,17 +167,18 @@ class SavePresetDialog(QDialog):
         
         conn_row1 = QHBoxLayout()
         conn_row1.setSpacing(10)
-        lbl_freq = QLabel("SWD频率:")
+        lbl_freq = BodyLabel("SWD频率:")
         lbl_freq.setMinimumWidth(75)
         lbl_freq.setFixedHeight(36)
         lbl_freq.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         conn_row1.addWidget(lbl_freq)
-        self.freq_combo = ComboBox()
+        self.freq_combo = EditableComboBox()
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
-        self.freq_combo.setMaximumWidth(100)
+        self.freq_combo.setPlaceholderText("输入或选择频率")
+        self.freq_combo.setMaximumWidth(140)
         self.freq_combo.setFixedHeight(36)
         conn_row1.addWidget(self.freq_combo)
-        lbl_mode = QLabel("连接模式:")
+        lbl_mode = BodyLabel("连接模式:")
         lbl_mode.setFixedHeight(36)
         lbl_mode.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         conn_row1.addWidget(lbl_mode)
@@ -164,7 +192,7 @@ class SavePresetDialog(QDialog):
         
         conn_row2 = QHBoxLayout()
         conn_row2.setSpacing(10)
-        lbl_pack = QLabel("Pack文件:")
+        lbl_pack = BodyLabel("Pack文件:")
         lbl_pack.setMinimumWidth(75)
         lbl_pack.setFixedHeight(36)
         lbl_pack.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -226,7 +254,7 @@ class SavePresetDialog(QDialog):
         # Quick path buttons
         path_row = QHBoxLayout()
         path_row.setSpacing(10)
-        lbl_quick = QLabel("快速选择:")
+        lbl_quick = BodyLabel("快速选择:")
         lbl_quick.setMinimumWidth(75)
         lbl_quick.setFixedHeight(36)
         lbl_quick.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -303,27 +331,27 @@ class SavePresetDialog(QDialog):
         target = settings.get('target', '')
         self.target_edit.setText(target)
         
-        # Vendor
+        # Vendor - use setText for EditableComboBox (supports custom values)
         vendor = settings.get('vendor', '')
         if vendor:
-            idx = self.vendor_combo.findText(vendor)
-            if idx >= 0:
-                self.vendor_combo.setCurrentIndex(idx)
+            self.vendor_combo.setText(vendor)
         else:
             # Auto-detect vendor from target name
             target_lower = target.lower()
             if target_lower.startswith('stm32'):
-                self.vendor_combo.setCurrentText("STMicroelectronics")
+                self.vendor_combo.setText("STMicroelectronics")
             elif target_lower.startswith('gd32'):
-                self.vendor_combo.setCurrentText("GigaDevice")
+                self.vendor_combo.setText("GigaDevice")
             elif target_lower.startswith('mm32'):
-                self.vendor_combo.setCurrentText("MindMotion")
+                self.vendor_combo.setText("MindMotion")
             elif target_lower.startswith('nrf'):
-                self.vendor_combo.setCurrentText("Nordic")
+                self.vendor_combo.setText("Nordic")
             elif target_lower.startswith('lpc') or target_lower.startswith('mimx'):
-                self.vendor_combo.setCurrentText("NXP")
+                self.vendor_combo.setText("NXP")
             elif target_lower.startswith('at32'):
-                self.vendor_combo.setCurrentText("Artery")
+                self.vendor_combo.setText("Artery")
+            elif target_lower.startswith('fm33') or target_lower.startswith('fm'):
+                self.vendor_combo.setText("FMSH")
         
         # Chip family
         family = settings.get('chip_family', '')
@@ -332,10 +360,18 @@ class SavePresetDialog(QDialog):
         elif target and len(target) >= 5:
             self.family_edit.setText(target[:5].upper())
         
-        # Frequency
+        # Frequency - use setText for EditableComboBox (supports custom values)
         freq = settings.get('frequency', 1000000)
-        freq_map = {100000: 0, 500000: 1, 1000000: 2, 2000000: 3, 4000000: 4, 8000000: 5, 10000000: 6}
-        self.freq_combo.setCurrentIndex(freq_map.get(freq, 2))
+        freq_text_map = {100000: "100 kHz", 500000: "500 kHz", 1000000: "1 MHz", 
+                        2000000: "2 MHz", 4000000: "4 MHz", 8000000: "8 MHz", 10000000: "10 MHz"}
+        if freq in freq_text_map:
+            self.freq_combo.setText(freq_text_map[freq])
+        else:
+            # Custom frequency - format nicely
+            if freq >= 1000000:
+                self.freq_combo.setText(f"{freq / 1000000:.1f} MHz")
+            else:
+                self.freq_combo.setText(f"{freq / 1000} kHz")
         
         # Connect mode
         mode = settings.get('connect_mode', 'under-reset')
@@ -459,19 +495,31 @@ class SavePresetDialog(QDialog):
         except ValueError:
             ram_start = '0x20000000'
         
-        # Parse frequency
-        freq_map = {0: 100000, 1: 500000, 2: 1000000, 3: 2000000, 4: 4000000, 5: 8000000, 6: 10000000}
+        # Parse frequency from text (EditableComboBox)
+        freq_text = self.freq_combo.text().strip().lower()
+        frequency = 1000000  # default 1 MHz
+        try:
+            if 'mhz' in freq_text:
+                freq_val = float(freq_text.replace('mhz', '').strip())
+                frequency = int(freq_val * 1000000)
+            elif 'khz' in freq_text:
+                freq_val = float(freq_text.replace('khz', '').strip())
+                frequency = int(freq_val * 1000)
+            elif freq_text.isdigit():
+                frequency = int(freq_text)
+        except (ValueError, AttributeError):
+            frequency = 1000000
         
         return {
             'name': self.name_edit.text().strip() or "Unnamed Preset",
-            'vendor': self.vendor_combo.currentText(),
+            'vendor': self.vendor_combo.text().strip() or self.vendor_combo.currentText(),
             'chip_family': self.family_edit.text().strip(),
             'target': self.target_edit.text().strip(),
             'flash_start': flash_start,
             'ram_start': ram_start,
-            'frequency': freq_map.get(self.freq_combo.currentIndex(), 1000000),
+            'frequency': frequency,
             'connect_mode': self.mode_combo.currentText(),
-            'pack_file': self.pack_edit.text().strip(),
+            'pack_file': to_relative_pack_path(self.pack_edit.text().strip()),
             'description': self.desc_edit.text().strip(),
             'notes': self.notes_edit.text().strip(),
         }

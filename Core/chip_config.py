@@ -25,33 +25,104 @@ def get_project_root() -> Path:
     return Path.cwd()
 
 
+# Default paths relative to project root
+DEFAULT_PYOCD_PATH = "Driver/pyOCD"
+DEFAULT_PACK_DIRECTORY = "Package/Vendor"
+
+
+def to_relative_path(abs_path: str) -> str:
+    """
+    Convert absolute path to relative path (relative to project root) for storage.
+    
+    This ensures paths are portable across different machines and platforms.
+    
+    Args:
+        abs_path: Absolute or relative path
+        
+    Returns:
+        Relative path if within project, otherwise original path
+    """
+    if not abs_path:
+        return ''
+    
+    path_obj = Path(abs_path)
+    project_root = get_project_root()
+    
+    try:
+        # Try to make path relative to project root
+        relative = path_obj.relative_to(project_root)
+        return str(relative)
+    except ValueError:
+        # Path is not under project root, keep as-is
+        return abs_path
+
+
+def to_absolute_path(rel_path: str) -> str:
+    """
+    Convert relative path to absolute path (based on project root).
+    
+    Args:
+        rel_path: Relative or absolute path
+        
+    Returns:
+        Absolute path resolved from project root
+    """
+    if not rel_path:
+        return ''
+    
+    path_obj = Path(rel_path)
+    
+    # If already absolute and exists, return as-is
+    if path_obj.is_absolute():
+        if path_obj.exists():
+            return str(path_obj)
+        # Absolute path from another platform - try to extract relative part
+        return normalize_pack_path(rel_path)
+    
+    # Relative path - resolve from project root
+    project_root = get_project_root()
+    full_path = project_root / path_obj
+    return str(full_path)
+
+
 def normalize_pack_path(pack_path: str) -> str:
     """
     Normalize pack file path for cross-platform compatibility.
     
-    Converts absolute paths from other platforms to relative paths,
-    then resolves them for the current platform.
+    Handles:
+    - Relative paths (resolved from project root)
+    - Absolute paths from current platform
+    - Absolute paths from other platforms (Windows paths on Linux, etc.)
     
     Args:
         pack_path: Original pack file path (may be Linux or Windows format)
         
     Returns:
-        Normalized path for current platform
+        Absolute path for current platform
     """
     if not pack_path:
         return ''
     
-    # If it's already a valid file on current system, keep it
-    if os.path.isfile(pack_path):
+    project_root = get_project_root()
+    pack_path_obj = Path(pack_path)
+    
+    # Case 1: Relative path - resolve from project root
+    if not pack_path_obj.is_absolute():
+        full_path = project_root / pack_path
+        if full_path.exists():
+            return str(full_path)
+        # Return the resolved path even if it doesn't exist yet
+        return str(full_path)
+    
+    # Case 2: Absolute path that exists on current system
+    if pack_path_obj.exists():
         return pack_path
     
-    project_root = get_project_root()
-    
-    # Try to extract relative path from absolute paths
-    # Pattern: Look for "Package/Vendor/..." or "Package\Vendor\..." in the path
+    # Case 3: Absolute path from another platform - extract relative part
+    # Pattern: Look for "Package/...", "Driver/..." etc. in the path
     patterns = [
-        r'[/\\]?(Package[/\\]Vendor[/\\].+\.pack)$',  # Package/Vendor/...
-        r'[/\\]?(Package[/\\].+\.pack)$',             # Package/...
+        r'[/\\]?(Package[/\\].+)$',       # Package/...
+        r'[/\\]?(Driver[/\\].+)$',        # Driver/...
     ]
     
     for pattern in patterns:
@@ -61,17 +132,18 @@ def normalize_pack_path(pack_path: str) -> str:
             # Normalize separators for current OS
             relative_path = relative_path.replace('\\', '/').replace('/', os.sep)
             full_path = project_root / relative_path
-            if full_path.exists():
-                LOG.debug(f"Normalized pack path: {pack_path} -> {full_path}")
-                return str(full_path)
-            else:
-                LOG.warning(f"Pack file not found at normalized path: {full_path}")
-                return relative_path  # Return relative path anyway
+            LOG.debug(f"Normalized cross-platform path: {pack_path} -> {full_path}")
+            return str(full_path)
     
-    # If no pattern matched, just return the original
-    # (it might be a user-specified custom path)
-    LOG.debug(f"Pack path not normalized (keeping as-is): {pack_path}")
+    # Case 4: External path that doesn't exist - return as-is (user may fix it)
+    LOG.warning(f"Path not found and cannot normalize: {pack_path}")
     return pack_path
+
+
+# Keep old function name for backwards compatibility
+def to_relative_pack_path(pack_path: str) -> str:
+    """Alias for to_relative_path for backwards compatibility"""
+    return to_relative_path(pack_path)
 
 
 class ChipVendor(Enum):

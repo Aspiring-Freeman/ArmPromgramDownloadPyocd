@@ -16,6 +16,7 @@ from pyocd.core.session import Session
 
 from Core.logger import command_logger
 from Core.pyocd.base import ConnectMode, ProbeInfo, FlashRegion
+from Core.chip_config import normalize_pack_path
 
 LOG = logging.getLogger(__name__)
 
@@ -72,6 +73,11 @@ class ConnectionMixin:
     ) -> bool:
         """Internal connect implementation - must be called with lock held"""
         start_time = time.time()
+        
+        # Normalize pack path for cross-platform compatibility
+        if pack_path:
+            pack_path = normalize_pack_path(pack_path)
+            LOG.debug(f"Using pack path: {pack_path}")
         
         # Build equivalent command line for logging
         cmd_args = []

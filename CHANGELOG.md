@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-01-07
+
+### Added
+- FM33LG04X chip preset for FMSH (复旦微) microcontrollers
+- Auto-detection for FMSH chips (fm33/fm prefix)
+- Cross-platform relative path support for pack files and PyOCD directory
+  - Paths stored as relative in config.json for portability
+  - Automatic conversion between relative and absolute paths
+
+### Changed
+- **UI Enhancement**: All frequency ComboBox changed to EditableComboBox
+  - Supports custom frequency input (e.g., "3.5 MHz", "600 kHz")
+  - Added 8 MHz and 10 MHz preset options
+- **UI Enhancement**: Vendor ComboBox changed to EditableComboBox
+  - Supports custom vendor input (no longer limited to preset list)
+  - Removed "其他" option (can now type any vendor directly)
+- Fixed theme styling for SavePresetDialog in dark mode
+- Fixed settings page theme initialization order
+- Improved pack path normalization for Windows/Linux compatibility
+
+### Fixed
+- Labels invisible in dark mode for Settings page and SavePresetDialog
+- Windows absolute paths not working on Linux (and vice versa)
+
 ## [1.2.0] - 2026-01-07
 
 ### Added

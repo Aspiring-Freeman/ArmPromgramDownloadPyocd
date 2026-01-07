@@ -41,10 +41,10 @@ class MainWindow(FluentWindow):
         self._state_tooltip: Optional[StateToolTip] = None
         
         self._init_window()
+        self._apply_theme()  # Apply theme BEFORE creating pages
         self._init_pages()
         self._connect_signals()
         self._restore_geometry()
-        self._apply_theme()
         
     def _init_window(self):
         self.setWindowTitle("ARM Flash Programming Tool")

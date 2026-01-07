@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QListWidgetItem, 
 
 from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton, ToolButton,
-    LineEdit, ComboBox, TitleLabel, BodyLabel, CaptionLabel,
+    LineEdit, ComboBox, EditableComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, SearchLineEdit, ListWidget,
     InfoBadge, CheckBox, IndeterminateProgressBar, InfoBar, InfoBarPosition,
     MessageBox
@@ -205,9 +205,10 @@ class ProbePage(PresetManagerMixin, QWidget):
         
         opt_row = QHBoxLayout()
         opt_row.addWidget(BodyLabel("SWD频率:"))
-        self.freq_combo = ComboBox()
+        self.freq_combo = EditableComboBox()
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
-        self.freq_combo.setCurrentIndex(0)  # 默认 100 kHz (最稳定)
+        self.freq_combo.setText("100 kHz")  # 默认 100 kHz (最稳定)
+        self.freq_combo.setPlaceholderText("输入或选择频率")
         opt_row.addWidget(self.freq_combo)
         
         opt_row.addWidget(BodyLabel("连接模式:"))
@@ -334,8 +335,18 @@ class ProbePage(PresetManagerMixin, QWidget):
             self.pack_edit.setText(last_pack)
             
         last_freq = self._config.get_last_frequency()
-        freq_map = {100000: 0, 500000: 1, 1000000: 2, 2000000: 3, 4000000: 4, 8000000: 5, 10000000: 6}
-        self.freq_combo.setCurrentIndex(freq_map.get(last_freq, 2))  # 默认 1 MHz
+        freq_text_map = {100000: "100 kHz", 500000: "500 kHz", 1000000: "1 MHz", 
+                        2000000: "2 MHz", 4000000: "4 MHz", 8000000: "8 MHz", 10000000: "10 MHz"}
+        if last_freq in freq_text_map:
+            self.freq_combo.setText(freq_text_map[last_freq])
+        else:
+            # Custom frequency - format nicely
+            if last_freq >= 1000000:
+                self.freq_combo.setText(f"{last_freq / 1000000:.1f} MHz")
+            elif last_freq >= 1000:
+                self.freq_combo.setText(f"{last_freq / 1000} kHz")
+            else:
+                self.freq_combo.setText("1 MHz")  # default
         
     def _update_target_combo(self, targets):
         """Update target combo box"""
@@ -383,8 +394,20 @@ class ProbePage(PresetManagerMixin, QWidget):
             if '[' in text and ']' in text:
                 probe_id = text.split('[')[1].split(']')[0].replace('...', '')
             
-        freq_map = {0: 100000, 1: 500000, 2: 1000000, 3: 2000000, 4: 4000000, 5: 8000000, 6: 10000000}
-        freq = freq_map.get(self.freq_combo.currentIndex(), 1000000)
+        # Parse frequency from text (EditableComboBox)
+        freq_text = self.freq_combo.text().strip().lower()
+        freq = 1000000  # default 1 MHz
+        try:
+            if 'mhz' in freq_text:
+                freq_val = float(freq_text.replace('mhz', '').strip())
+                freq = int(freq_val * 1000000)
+            elif 'khz' in freq_text:
+                freq_val = float(freq_text.replace('khz', '').strip())
+                freq = int(freq_val * 1000)
+            elif freq_text.isdigit():
+                freq = int(freq_text)
+        except (ValueError, AttributeError):
+            freq = 1000000
         
         mode_map = {0: ConnectMode.UNDER_RESET, 1: ConnectMode.HALT, 2: ConnectMode.PRE_RESET, 3: ConnectMode.ATTACH}
         mode = mode_map.get(self.mode_combo.currentIndex(), ConnectMode.UNDER_RESET)

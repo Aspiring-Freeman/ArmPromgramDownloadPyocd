@@ -102,8 +102,9 @@ class EditPresetDialog(QDialog):
         # Connection settings
         conn_row = QHBoxLayout()
         conn_row.addWidget(BodyLabel("频率:"))
-        self.freq_combo = ComboBox()
-        self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz"])
+        self.freq_combo = EditableComboBox()
+        self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
+        self.freq_combo.setPlaceholderText("输入或选择频率")
         conn_row.addWidget(self.freq_combo)
         
         conn_row.addWidget(BodyLabel("连接模式:"))
@@ -181,9 +182,18 @@ class EditPresetDialog(QDialog):
         self.flash_edit.setText(f"0x{config.flash_start:08X}")
         self.ram_edit.setText(f"0x{config.ram_start:08X}")
         
-        # Frequency
-        freq_map = {100000: 0, 500000: 1, 1000000: 2, 2000000: 3, 4000000: 4}
-        self.freq_combo.setCurrentIndex(freq_map.get(config.default_frequency, 2))
+        # Frequency - use setText for EditableComboBox
+        freq = config.default_frequency
+        freq_text_map = {100000: "100 kHz", 500000: "500 kHz", 1000000: "1 MHz", 
+                        2000000: "2 MHz", 4000000: "4 MHz", 8000000: "8 MHz", 10000000: "10 MHz"}
+        if freq in freq_text_map:
+            self.freq_combo.setText(freq_text_map[freq])
+        else:
+            # Custom frequency - format nicely
+            if freq >= 1000000:
+                self.freq_combo.setText(f"{freq / 1000000:.1f} MHz")
+            else:
+                self.freq_combo.setText(f"{freq / 1000} kHz")
         
         idx = self.mode_combo.findText(config.connect_mode)
         if idx >= 0:
@@ -212,14 +222,29 @@ class EditPresetDialog(QDialog):
         
         freq_map = {0: 100000, 1: 500000, 2: 1000000, 3: 2000000, 4: 4000000}
         
+        # Parse frequency from text (EditableComboBox)
+        freq_text = self.freq_combo.text().strip().lower()
+        frequency = 1000000  # default 1 MHz
+        try:
+            if 'mhz' in freq_text:
+                freq_val = float(freq_text.replace('mhz', '').strip())
+                frequency = int(freq_val * 1000000)
+            elif 'khz' in freq_text:
+                freq_val = float(freq_text.replace('khz', '').strip())
+                frequency = int(freq_val * 1000)
+            elif freq_text.isdigit():
+                frequency = int(freq_text)
+        except (ValueError, AttributeError):
+            frequency = 1000000
+        
         return ChipConfig(
             name=name,
-            vendor=self.vendor_combo.currentText(),
+            vendor=self.vendor_combo.text().strip() or self.vendor_combo.currentText(),
             chip_family=self.family_edit.text().strip() or target[:8],
             target=target,
             flash_start=flash_start,
             ram_start=ram_start,
-            default_frequency=freq_map.get(self.freq_combo.currentIndex(), 1000000),
+            default_frequency=frequency,
             connect_mode=self.mode_combo.currentText(),
             pack_file=self.pack_edit.text().strip(),
             description=self.desc_edit.text().strip(),
