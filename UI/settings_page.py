@@ -6,7 +6,7 @@ import os
 import logging
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel, QScrollArea
 
 from qfluentwidgets import (
     CardWidget, PushButton, ToolButton,
@@ -14,7 +14,7 @@ from qfluentwidgets import (
     FluentIcon, StrongBodyLabel, SwitchButton, Slider,
     SettingCardGroup, OptionsSettingCard, RangeSettingCard,
     PushSettingCard, SwitchSettingCard, ConfigItem, qconfig,
-    PrimaryPushSettingCard
+    PrimaryPushSettingCard, SmoothScrollArea
 )
 
 try:
@@ -40,21 +40,40 @@ class SettingsPage(QWidget):
         self._load_settings()
         
     def _init_ui(self):
-        layout = QVBoxLayout(self)
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Scroll area
+        scroll = SmoothScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        # Content widget
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(36, 20, 36, 20)
         layout.setSpacing(16)
         
         layout.addWidget(TitleLabel("设置"))
         
+        ROW_HEIGHT = 36
+        
         # Appearance card
         appear_card = CardWidget()
         appear_layout = QVBoxLayout(appear_card)
+        appear_layout.setSpacing(10)
         appear_layout.addWidget(StrongBodyLabel("外观"))
         
         theme_row = QHBoxLayout()
-        theme_row.addWidget(BodyLabel("主题:"))
+        theme_row.setSpacing(10)
+        lbl_theme = QLabel("主题:")
+        lbl_theme.setFixedHeight(ROW_HEIGHT)
+        theme_row.addWidget(lbl_theme)
         self.theme_combo = ComboBox()
         self.theme_combo.addItems(["浅色", "深色", "跟随系统"])
+        self.theme_combo.setFixedHeight(ROW_HEIGHT)
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         theme_row.addWidget(self.theme_combo)
         theme_row.addStretch()
@@ -65,12 +84,17 @@ class SettingsPage(QWidget):
         # Debug card
         debug_card = CardWidget()
         debug_layout = QVBoxLayout(debug_card)
+        debug_layout.setSpacing(10)
         debug_layout.addWidget(StrongBodyLabel("调试设置"))
         
         freq_row = QHBoxLayout()
-        freq_row.addWidget(BodyLabel("默认SWD频率:"))
+        freq_row.setSpacing(10)
+        lbl_freq = QLabel("默认SWD频率:")
+        lbl_freq.setFixedHeight(ROW_HEIGHT)
+        freq_row.addWidget(lbl_freq)
         self.freq_combo = ComboBox()
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz"])
+        self.freq_combo.setFixedHeight(ROW_HEIGHT)
         self.freq_combo.setToolTip(
             "100 kHz: 最稳定，适合连接问题排查\n"
             "500 kHz: 平衡速度和稳定性\n"
@@ -83,13 +107,18 @@ class SettingsPage(QWidget):
         debug_layout.addLayout(freq_row)
         
         retry_row = QHBoxLayout()
-        retry_row.addWidget(BodyLabel("连接重试次数:"))
+        retry_row.setSpacing(10)
+        lbl_retry = QLabel("连接重试次数:")
+        lbl_retry.setFixedHeight(ROW_HEIGHT)
+        retry_row.addWidget(lbl_retry)
         self.retry_slider = Slider(Qt.Orientation.Horizontal)
         self.retry_slider.setRange(1, 10)
         self.retry_slider.setValue(3)
         self.retry_slider.setFixedWidth(200)
+        self.retry_slider.setFixedHeight(ROW_HEIGHT)
         retry_row.addWidget(self.retry_slider)
-        self.retry_label = BodyLabel("3")
+        self.retry_label = QLabel("3")
+        self.retry_label.setFixedHeight(ROW_HEIGHT)
         self.retry_slider.valueChanged.connect(lambda v: self.retry_label.setText(str(v)))
         retry_row.addWidget(self.retry_label)
         retry_row.addStretch()
@@ -97,17 +126,56 @@ class SettingsPage(QWidget):
         
         layout.addWidget(debug_card)
         
+        # PyOCD card
+        pyocd_card = CardWidget()
+        pyocd_layout = QVBoxLayout(pyocd_card)
+        pyocd_layout.setSpacing(10)
+        pyocd_layout.addWidget(StrongBodyLabel("PyOCD 设置"))
+        
+        pyocd_path_row = QHBoxLayout()
+        pyocd_path_row.setSpacing(10)
+        lbl_pyocd = QLabel("PyOCD 路径:")
+        lbl_pyocd.setFixedHeight(ROW_HEIGHT)
+        pyocd_path_row.addWidget(lbl_pyocd)
+        self.pyocd_path_edit = LineEdit()
+        self.pyocd_path_edit.setPlaceholderText("使用内置 PyOCD (Driver/pyOCD)")
+        self.pyocd_path_edit.setFixedHeight(ROW_HEIGHT)
+        self.pyocd_path_edit.setToolTip(
+            "指定自定义 PyOCD 路径，留空则使用内置版本\n"
+            "可以是:\n"
+            "  - PyOCD 安装目录 (如: C:\\Python39\\Lib\\site-packages\\pyocd)\n"
+            "  - pyocd 可执行文件路径\n"
+            "  - 包含 pyocd 模块的目录"
+        )
+        pyocd_path_row.addWidget(self.pyocd_path_edit, 1)
+        self.pyocd_path_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
+        self.pyocd_path_btn.setFixedHeight(ROW_HEIGHT)
+        self.pyocd_path_btn.clicked.connect(self._browse_pyocd_path)
+        pyocd_path_row.addWidget(self.pyocd_path_btn)
+        pyocd_layout.addLayout(pyocd_path_row)
+        
+        self.pyocd_info_label = CaptionLabel("使用内置 PyOCD")
+        pyocd_layout.addWidget(self.pyocd_info_label)
+        
+        layout.addWidget(pyocd_card)
+        
         # Pack card
         pack_card = CardWidget()
         pack_layout = QVBoxLayout(pack_card)
+        pack_layout.setSpacing(10)
         pack_layout.addWidget(StrongBodyLabel("CMSIS-Pack 设置"))
         
         pack_dir_row = QHBoxLayout()
-        pack_dir_row.addWidget(BodyLabel("Pack 目录:"))
+        pack_dir_row.setSpacing(10)
+        lbl_pack = QLabel("Pack 目录:")
+        lbl_pack.setFixedHeight(ROW_HEIGHT)
+        pack_dir_row.addWidget(lbl_pack)
         self.pack_dir_edit = LineEdit()
         self.pack_dir_edit.setPlaceholderText("选择 CMSIS-Pack 目录")
-        pack_dir_row.addWidget(self.pack_dir_edit)
+        self.pack_dir_edit.setFixedHeight(ROW_HEIGHT)
+        pack_dir_row.addWidget(self.pack_dir_edit, 1)
         self.pack_dir_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
+        self.pack_dir_btn.setFixedHeight(ROW_HEIGHT)
         self.pack_dir_btn.clicked.connect(self._browse_pack_dir)
         pack_dir_row.addWidget(self.pack_dir_btn)
         pack_layout.addLayout(pack_dir_row)
@@ -120,10 +188,14 @@ class SettingsPage(QWidget):
         # Flash card
         flash_card = CardWidget()
         flash_layout = QVBoxLayout(flash_card)
+        flash_layout.setSpacing(10)
         flash_layout.addWidget(StrongBodyLabel("烧录设置"))
         
         verify_row = QHBoxLayout()
-        verify_row.addWidget(BodyLabel("默认校验烧录:"))
+        verify_row.setSpacing(10)
+        lbl_verify = QLabel("默认校验烧录:")
+        lbl_verify.setFixedHeight(ROW_HEIGHT)
+        verify_row.addWidget(lbl_verify)
         self.verify_switch = SwitchButton()
         self.verify_switch.setChecked(True)
         verify_row.addWidget(self.verify_switch)
@@ -131,7 +203,10 @@ class SettingsPage(QWidget):
         flash_layout.addLayout(verify_row)
         
         reset_row = QHBoxLayout()
-        reset_row.addWidget(BodyLabel("烧录后自动复位:"))
+        reset_row.setSpacing(10)
+        lbl_reset = QLabel("烧录后自动复位:")
+        lbl_reset.setFixedHeight(ROW_HEIGHT)
+        reset_row.addWidget(lbl_reset)
         self.reset_switch = SwitchButton()
         self.reset_switch.setChecked(True)
         reset_row.addWidget(self.reset_switch)
@@ -143,15 +218,19 @@ class SettingsPage(QWidget):
         # About card
         about_card = CardWidget()
         about_layout = QVBoxLayout(about_card)
+        about_layout.setSpacing(8)
         about_layout.addWidget(StrongBodyLabel("关于"))
-        about_layout.addWidget(BodyLabel("ARM Flash Tool v1.0.0"))
+        about_layout.addWidget(QLabel("ARM Flash Tool v1.0.0"))
         about_layout.addWidget(CaptionLabel("基于 PyOCD 的 ARM 芯片烧录工具"))
         about_layout.addWidget(CaptionLabel("支持 CMSIS-DAP / ST-Link 调试器"))
         
         link_row = QHBoxLayout()
+        link_row.setSpacing(10)
         self.github_btn = PushButton("GitHub", icon=FluentIcon.GITHUB)
+        self.github_btn.setFixedHeight(ROW_HEIGHT)
         link_row.addWidget(self.github_btn)
         self.docs_btn = PushButton("文档", icon=FluentIcon.DOCUMENT)
+        self.docs_btn.setFixedHeight(ROW_HEIGHT)
         link_row.addWidget(self.docs_btn)
         link_row.addStretch()
         about_layout.addLayout(link_row)
@@ -163,21 +242,56 @@ class SettingsPage(QWidget):
         btn_row.addStretch()
         
         self.reset_btn = PushButton("恢复默认", icon=FluentIcon.SYNC)
+        self.reset_btn.setFixedHeight(ROW_HEIGHT)
         self.reset_btn.clicked.connect(self._reset_settings)
         btn_row.addWidget(self.reset_btn)
         
         self.save_btn = PushButton("保存设置", icon=FluentIcon.SAVE)
+        self.save_btn.setFixedHeight(ROW_HEIGHT)
         self.save_btn.clicked.connect(self._save_settings)
         btn_row.addWidget(self.save_btn)
         
         layout.addLayout(btn_row)
         layout.addStretch()
         
+        scroll.setWidget(content)
+        main_layout.addWidget(scroll)
+        
     def _browse_pack_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择 CMSIS-Pack 目录")
         if path:
             self.pack_dir_edit.setText(path)
             self._update_pack_info(path)
+    
+    def _browse_pyocd_path(self):
+        """Browse for custom PyOCD path"""
+        path = QFileDialog.getExistingDirectory(self, "选择 PyOCD 目录")
+        if path:
+            self.pyocd_path_edit.setText(path)
+            self._update_pyocd_info(path)
+    
+    def _update_pyocd_info(self, path):
+        """Update PyOCD info label based on path"""
+        if not path:
+            self.pyocd_info_label.setText("使用内置 PyOCD (Driver/pyOCD)")
+            return
+        
+        path_obj = os.path.join(path, "pyocd") if os.path.isdir(path) else path
+        
+        # Check if it's a valid pyocd path
+        if os.path.isdir(path):
+            # Check for pyocd module
+            pyocd_init = os.path.join(path, "pyocd", "__init__.py")
+            pyocd_direct = os.path.join(path, "__init__.py")
+            
+            if os.path.exists(pyocd_init):
+                self.pyocd_info_label.setText(f"✓ 找到 PyOCD 模块: {path}")
+            elif os.path.exists(pyocd_direct) and "pyocd" in path.lower():
+                self.pyocd_info_label.setText(f"✓ 找到 PyOCD 模块: {path}")
+            else:
+                self.pyocd_info_label.setText(f"⚠ 未找到 pyocd 模块，请检查路径")
+        else:
+            self.pyocd_info_label.setText(f"⚠ 路径不存在: {path}")
             
     def _update_pack_info(self, path):
         if path and os.path.isdir(path):
@@ -219,6 +333,11 @@ class SettingsPage(QWidget):
         
         self.retry_slider.setValue(settings.get("connect_retries", 3))
         
+        # PyOCD path
+        pyocd_path = settings.get("pyocd_path", "")
+        self.pyocd_path_edit.setText(pyocd_path)
+        self._update_pyocd_info(pyocd_path)
+        
         pack_dir = settings.get("pack_directory", "")
         self.pack_dir_edit.setText(pack_dir)
         self._update_pack_info(pack_dir)
@@ -237,6 +356,7 @@ class SettingsPage(QWidget):
         settings["default_frequency"] = freq_map.get(self.freq_combo.currentIndex(), 1000000)
         
         settings["connect_retries"] = self.retry_slider.value()
+        settings["pyocd_path"] = self.pyocd_path_edit.text().strip()
         settings["pack_directory"] = self.pack_dir_edit.text()
         settings["default_verify"] = self.verify_switch.isChecked()
         settings["default_reset"] = self.reset_switch.isChecked()
@@ -248,6 +368,8 @@ class SettingsPage(QWidget):
         self.theme_combo.setCurrentIndex(0)  # Light theme
         self.freq_combo.setCurrentIndex(2)  # 1 MHz
         self.retry_slider.setValue(3)
+        self.pyocd_path_edit.clear()
+        self._update_pyocd_info("")
         self.pack_dir_edit.clear()
         self.verify_switch.setChecked(True)
         self.reset_switch.setChecked(True)

@@ -1,11 +1,13 @@
 # ARM Flash Programming Tool - Requirements
 # Python 3.9+ required
 
-# NOTE: PyOCD is NOT installed via pip
-# We use the local version from Driver/pyOCD/
+# =============================================================================
+# PyOCD - Local editable install (generates _version.py and pyocd.exe)
+# =============================================================================
+-e ./Driver/pyOCD
 
 # =============================================================================
-# PyOCD dependencies (pyocd itself is local, not installed via pip)
+# PyOCD dependencies
 # =============================================================================
 pyusb>=1.0.0,<2.0.0
 pyserial>=3.0,<4.0

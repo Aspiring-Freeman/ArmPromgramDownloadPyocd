@@ -7,12 +7,71 @@ Manages chip presets for different vendors and chip families
 
 import json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict, field
 from enum import Enum
 
 LOG = logging.getLogger(__name__)
+
+
+def get_project_root() -> Path:
+    """Get project root directory"""
+    current = Path(__file__).parent.parent
+    if (current / "main.py").exists():
+        return current
+    return Path.cwd()
+
+
+def normalize_pack_path(pack_path: str) -> str:
+    """
+    Normalize pack file path for cross-platform compatibility.
+    
+    Converts absolute paths from other platforms to relative paths,
+    then resolves them for the current platform.
+    
+    Args:
+        pack_path: Original pack file path (may be Linux or Windows format)
+        
+    Returns:
+        Normalized path for current platform
+    """
+    if not pack_path:
+        return ''
+    
+    # If it's already a valid file on current system, keep it
+    if os.path.isfile(pack_path):
+        return pack_path
+    
+    project_root = get_project_root()
+    
+    # Try to extract relative path from absolute paths
+    # Pattern: Look for "Package/Vendor/..." or "Package\Vendor\..." in the path
+    patterns = [
+        r'[/\\]?(Package[/\\]Vendor[/\\].+\.pack)$',  # Package/Vendor/...
+        r'[/\\]?(Package[/\\].+\.pack)$',             # Package/...
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, pack_path, re.IGNORECASE)
+        if match:
+            relative_path = match.group(1)
+            # Normalize separators for current OS
+            relative_path = relative_path.replace('\\', '/').replace('/', os.sep)
+            full_path = project_root / relative_path
+            if full_path.exists():
+                LOG.debug(f"Normalized pack path: {pack_path} -> {full_path}")
+                return str(full_path)
+            else:
+                LOG.warning(f"Pack file not found at normalized path: {full_path}")
+                return relative_path  # Return relative path anyway
+    
+    # If no pattern matched, just return the original
+    # (it might be a user-specified custom path)
+    LOG.debug(f"Pack path not normalized (keeping as-is): {pack_path}")
+    return pack_path
 
 
 class ChipVendor(Enum):
@@ -136,6 +195,12 @@ class ChipConfig:
         if defaults.get('connect_mode') not in valid_modes:
             LOG.warning(f"Invalid connect_mode '{defaults.get('connect_mode')}', using 'under-reset'")
             defaults['connect_mode'] = 'under-reset'
+        
+        # Normalize pack_file path for cross-platform compatibility
+        pack_file = defaults.get('pack_file', '')
+        if pack_file:
+            pack_file = normalize_pack_path(pack_file)
+            defaults['pack_file'] = pack_file
         
         # Only pass fields that exist in the dataclass
         valid_fields = {k: v for k, v in defaults.items() if k in cls.__dataclass_fields__}

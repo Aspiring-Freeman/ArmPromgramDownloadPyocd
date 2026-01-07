@@ -13,7 +13,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QFileDialog, QDialogButtonBox
+    QFileDialog, QDialogButtonBox, QFormLayout, QLabel, QWidget
 )
 
 from qfluentwidgets import (
@@ -43,11 +43,14 @@ class SavePresetDialog(QDialog):
         self._project_root = self._get_project_root()
         
         self.setWindowTitle("保存芯片预设")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(500 if not export_only else 400)
+        self.setMinimumWidth(750)
+        self.setMinimumHeight(650 if not export_only else 550)
         
         self._init_ui()
         self._load_defaults()
+        
+        # Force layout recalculation for high DPI
+        self.adjustSize()
     
     def _get_project_root(self) -> Path:
         """Get project root directory"""
@@ -59,170 +62,205 @@ class SavePresetDialog(QDialog):
     
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(16)
+        layout.setSpacing(8)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
         layout.addWidget(StrongBodyLabel("保存芯片配置预设"))
+        layout.addSpacing(10)
         
-        # Basic info card
-        basic_card = CardWidget()
-        basic_layout = QGridLayout(basic_card)
-        basic_layout.setSpacing(10)
+        # Helper function to create a labeled row
+        def add_row(label_text, widget):
+            row = QHBoxLayout()
+            row.setSpacing(10)
+            lbl = QLabel(label_text)
+            lbl.setMinimumWidth(75)
+            lbl.setFixedHeight(36)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            row.addWidget(lbl)
+            widget.setFixedHeight(36)
+            row.addWidget(widget, 1)
+            layout.addLayout(row)
         
         # Preset name
-        basic_layout.addWidget(BodyLabel("预设名称:"), 0, 0)
         self.name_edit = LineEdit()
         self.name_edit.setPlaceholderText("例如: STM32H503 开发板")
-        basic_layout.addWidget(self.name_edit, 0, 1)
+        add_row("预设名称:", self.name_edit)
         
         # Vendor
-        basic_layout.addWidget(BodyLabel("厂商:"), 1, 0)
         self.vendor_combo = ComboBox()
         self.vendor_combo.addItems([
             "STMicroelectronics", "GigaDevice", "MindMotion", "NXP", "Nordic",
             "Artery", "APM/Geehy", "WCH", "Microchip", "Infineon", "Nuvoton", "其他"
         ])
-        basic_layout.addWidget(self.vendor_combo, 1, 1)
+        add_row("厂商:", self.vendor_combo)
         
-        # Chip family
-        basic_layout.addWidget(BodyLabel("芯片系列:"), 2, 0)
+        # Family
         self.family_edit = LineEdit()
         self.family_edit.setPlaceholderText("例如: STM32H5")
-        basic_layout.addWidget(self.family_edit, 2, 1)
+        add_row("芯片系列:", self.family_edit)
         
         # Target
-        basic_layout.addWidget(BodyLabel("目标芯片:"), 3, 0)
         self.target_edit = LineEdit()
         self.target_edit.setPlaceholderText("PyOCD 目标名称")
-        self.target_edit.setReadOnly(True)  # From current settings
-        basic_layout.addWidget(self.target_edit, 3, 1)
+        self.target_edit.setReadOnly(True)
+        add_row("目标芯片:", self.target_edit)
         
-        layout.addWidget(basic_card)
+        # Memory section
+        layout.addSpacing(10)
+        layout.addWidget(StrongBodyLabel("内存配置"))
         
-        # Memory config card
-        mem_card = CardWidget()
-        mem_layout = QGridLayout(mem_card)
-        mem_layout.setSpacing(10)
-        
-        mem_layout.addWidget(StrongBodyLabel("内存配置"), 0, 0, 1, 4)
-        
-        mem_layout.addWidget(BodyLabel("Flash起始:"), 1, 0)
+        mem_row = QHBoxLayout()
+        mem_row.setSpacing(10)
+        lbl_flash = QLabel("Flash起始:")
+        lbl_flash.setMinimumWidth(75)
+        lbl_flash.setFixedHeight(36)
+        lbl_flash.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        mem_row.addWidget(lbl_flash)
         self.flash_edit = LineEdit()
         self.flash_edit.setPlaceholderText("0x08000000")
-        mem_layout.addWidget(self.flash_edit, 1, 1)
-        
-        mem_layout.addWidget(BodyLabel("RAM起始:"), 1, 2)
+        self.flash_edit.setMaximumWidth(130)
+        self.flash_edit.setFixedHeight(36)
+        mem_row.addWidget(self.flash_edit)
+        lbl_ram = QLabel("RAM起始:")
+        lbl_ram.setFixedHeight(36)
+        lbl_ram.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        mem_row.addWidget(lbl_ram)
         self.ram_edit = LineEdit()
         self.ram_edit.setPlaceholderText("0x20000000")
-        mem_layout.addWidget(self.ram_edit, 1, 3)
+        self.ram_edit.setMaximumWidth(130)
+        self.ram_edit.setFixedHeight(36)
+        mem_row.addWidget(self.ram_edit)
+        mem_row.addStretch()
+        layout.addLayout(mem_row)
         
-        layout.addWidget(mem_card)
+        # Connection section
+        layout.addSpacing(10)
+        layout.addWidget(StrongBodyLabel("连接配置"))
         
-        # Connection config card
-        conn_card = CardWidget()
-        conn_layout = QGridLayout(conn_card)
-        conn_layout.setSpacing(10)
-        
-        conn_layout.addWidget(StrongBodyLabel("连接配置"), 0, 0, 1, 4)
-        
-        conn_layout.addWidget(BodyLabel("SWD频率:"), 1, 0)
+        conn_row1 = QHBoxLayout()
+        conn_row1.setSpacing(10)
+        lbl_freq = QLabel("SWD频率:")
+        lbl_freq.setMinimumWidth(75)
+        lbl_freq.setFixedHeight(36)
+        lbl_freq.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        conn_row1.addWidget(lbl_freq)
         self.freq_combo = ComboBox()
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
-        conn_layout.addWidget(self.freq_combo, 1, 1)
-        
-        conn_layout.addWidget(BodyLabel("连接模式:"), 1, 2)
+        self.freq_combo.setMaximumWidth(100)
+        self.freq_combo.setFixedHeight(36)
+        conn_row1.addWidget(self.freq_combo)
+        lbl_mode = QLabel("连接模式:")
+        lbl_mode.setFixedHeight(36)
+        lbl_mode.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        conn_row1.addWidget(lbl_mode)
         self.mode_combo = ComboBox()
         self.mode_combo.addItems(["under-reset", "halt", "pre-reset", "attach"])
-        conn_layout.addWidget(self.mode_combo, 1, 3)
+        self.mode_combo.setMaximumWidth(120)
+        self.mode_combo.setFixedHeight(36)
+        conn_row1.addWidget(self.mode_combo)
+        conn_row1.addStretch()
+        layout.addLayout(conn_row1)
         
-        conn_layout.addWidget(BodyLabel("Pack文件:"), 2, 0)
+        conn_row2 = QHBoxLayout()
+        conn_row2.setSpacing(10)
+        lbl_pack = QLabel("Pack文件:")
+        lbl_pack.setMinimumWidth(75)
+        lbl_pack.setFixedHeight(36)
+        lbl_pack.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        conn_row2.addWidget(lbl_pack)
         self.pack_edit = LineEdit()
         self.pack_edit.setPlaceholderText("可选 CMSIS-Pack 文件")
-        conn_layout.addWidget(self.pack_edit, 2, 1, 1, 2)
+        self.pack_edit.setFixedHeight(36)
+        conn_row2.addWidget(self.pack_edit, 1)
         self.pack_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
+        self.pack_btn.setFixedHeight(36)
         self.pack_btn.clicked.connect(self._browse_pack)
-        conn_layout.addWidget(self.pack_btn, 2, 3)
+        conn_row2.addWidget(self.pack_btn)
+        layout.addLayout(conn_row2)
         
-        layout.addWidget(conn_card)
+        # Description section
+        layout.addSpacing(10)
+        layout.addWidget(StrongBodyLabel("描述与备注"))
         
-        # Description card
-        desc_card = CardWidget()
-        desc_layout = QVBoxLayout(desc_card)
-        desc_layout.addWidget(StrongBodyLabel("描述与备注"))
-        
-        desc_row = QHBoxLayout()
-        desc_row.addWidget(BodyLabel("描述:"))
         self.desc_edit = LineEdit()
         self.desc_edit.setPlaceholderText("简短描述")
-        desc_row.addWidget(self.desc_edit)
-        desc_layout.addLayout(desc_row)
+        add_row("描述:", self.desc_edit)
         
-        notes_row = QHBoxLayout()
-        notes_row.addWidget(BodyLabel("备注:"))
         self.notes_edit = LineEdit()
         self.notes_edit.setPlaceholderText("使用注意事项")
-        notes_row.addWidget(self.notes_edit)
-        desc_layout.addLayout(notes_row)
+        add_row("备注:", self.notes_edit)
         
-        layout.addWidget(desc_card)
-        
-        # Save location card
-        save_card = CardWidget()
-        save_layout = QVBoxLayout(save_card)
-        save_layout.addWidget(StrongBodyLabel("保存位置"))
+        # Save location section
+        layout.addSpacing(10)
+        layout.addWidget(StrongBodyLabel("保存位置"))
         
         # Save to app config
         self.save_to_app = CheckBox("保存到应用配置 (下次启动自动加载)")
         self.save_to_app.setChecked(True)
-        save_layout.addWidget(self.save_to_app)
+        self.save_to_app.setFixedHeight(36)
+        layout.addWidget(self.save_to_app)
         
         # Export to file
         export_row = QHBoxLayout()
+        export_row.setSpacing(10)
         self.export_to_file = CheckBox("同时导出到文件:")
         self.export_to_file.setChecked(False)
+        self.export_to_file.setFixedHeight(36)
         self.export_to_file.stateChanged.connect(self._on_export_changed)
         export_row.addWidget(self.export_to_file)
         
         self.export_path_edit = LineEdit()
         self.export_path_edit.setEnabled(False)
         self.export_path_edit.setPlaceholderText("选择保存路径...")
-        export_row.addWidget(self.export_path_edit)
+        self.export_path_edit.setFixedHeight(36)
+        export_row.addWidget(self.export_path_edit, 1)
         
         self.export_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
         self.export_btn.setEnabled(False)
+        self.export_btn.setFixedHeight(36)
         self.export_btn.clicked.connect(self._browse_export_path)
         export_row.addWidget(self.export_btn)
-        save_layout.addLayout(export_row)
+        layout.addLayout(export_row)
         
         # Quick path buttons
         path_row = QHBoxLayout()
-        path_row.addWidget(BodyLabel("快速选择:"))
+        path_row.setSpacing(10)
+        lbl_quick = QLabel("快速选择:")
+        lbl_quick.setMinimumWidth(75)
+        lbl_quick.setFixedHeight(36)
+        lbl_quick.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        path_row.addWidget(lbl_quick)
         
         self.doc_btn = PushButton("Doc/ChipConfigs")
         self.doc_btn.clicked.connect(lambda: self._set_export_path("Doc/ChipConfigs"))
         self.doc_btn.setEnabled(False)
+        self.doc_btn.setFixedHeight(36)
         path_row.addWidget(self.doc_btn)
         
         self.package_btn = PushButton("Package")
         self.package_btn.clicked.connect(lambda: self._set_export_path("Package"))
         self.package_btn.setEnabled(False)
+        self.package_btn.setFixedHeight(36)
         path_row.addWidget(self.package_btn)
         
         path_row.addStretch()
-        save_layout.addLayout(path_row)
+        layout.addLayout(path_row)
         
-        layout.addWidget(save_card)
+        layout.addSpacing(10)
         
         # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         
         self.cancel_btn = PushButton("取消")
+        self.cancel_btn.setFixedHeight(36)
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
         
         save_text = "导出" if self._export_only else "保存"
         self.save_btn = PushButton(save_text, icon=FluentIcon.SAVE)
+        self.save_btn.setFixedHeight(36)
         self.save_btn.clicked.connect(self._on_accept)
         btn_layout.addWidget(self.save_btn)
         

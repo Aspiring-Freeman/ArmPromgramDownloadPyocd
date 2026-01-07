@@ -12,6 +12,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 write_to = "pyocd/_version.py"
 local_scheme = "dirty-tag"
+fallback_version = "0.36.0"
 
 [tool.pytest.ini_options]
 testpaths = ["test/unit"]

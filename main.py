@@ -92,7 +92,29 @@ def check_pyocd_submodule() -> bool:
     Returns:
         True if PyOCD is available (local or fallback), False if neither works
     """
-    # Check for essential PyOCD files
+    # First, try to load custom PyOCD path from config
+    custom_pyocd_path = get_custom_pyocd_path()
+    
+    if custom_pyocd_path:
+        pyocd_path = Path(custom_pyocd_path)
+        # Check if custom path is valid
+        pyocd_init = pyocd_path / "pyocd" / "__init__.py"
+        pyocd_direct = pyocd_path / "__init__.py"
+        
+        if pyocd_init.exists():
+            sys.path.insert(0, str(pyocd_path))
+            print(f"[OK] Using custom PyOCD path: {pyocd_path}")
+            return True
+        elif pyocd_direct.exists() and "pyocd" in str(pyocd_path).lower():
+            # The path itself is the pyocd module
+            sys.path.insert(0, str(pyocd_path.parent))
+            print(f"[OK] Using custom PyOCD module: {pyocd_path}")
+            return True
+        else:
+            print(f"[WARN] Custom PyOCD path invalid: {pyocd_path}")
+            print("  Falling back to default...")
+    
+    # Check for essential PyOCD files in local path
     pyocd_init = LOCAL_PYOCD_PATH / "pyocd" / "__init__.py"
     pyocd_main = LOCAL_PYOCD_PATH / "pyocd" / "__main__.py"
     
@@ -103,7 +125,7 @@ def check_pyocd_submodule() -> bool:
     
     # Local PyOCD not available, print warning
     print("=" * 70)
-    print("⚠️  WARNING: Local PyOCD submodule not found or incomplete!")
+    print("[WARN] WARNING: Local PyOCD submodule not found or incomplete!")
     print("=" * 70)
     print(f"\nExpected location: {LOCAL_PYOCD_PATH}")
     print("\nThis project uses a local PyOCD version for consistency.")
@@ -116,17 +138,51 @@ def check_pyocd_submodule() -> bool:
     # Try to fall back to pip-installed pyocd
     try:
         import pyocd
-        print("\n✓ Fallback: Using pip-installed PyOCD instead.")
+        print("\n[OK] Fallback: Using pip-installed PyOCD instead.")
         print(f"  Version: {getattr(pyocd, '__version__', 'unknown')}")
         print("  Note: For best compatibility, please initialize the local submodule.\n")
         return True
     except ImportError:
-        print("\n✗ Error: No PyOCD installation found!")
+        print("\n[ERROR] No PyOCD installation found!")
         print("  Please either:")
         print("    1. Initialize the submodule: git submodule update --init --recursive")
         print("    2. Install PyOCD via pip: pip install pyocd")
+        print("    3. Set custom PyOCD path in Settings")
         print("")
         return False
+
+
+def get_custom_pyocd_path() -> str:
+    """
+    Get custom PyOCD path from config file (before full config load).
+    
+    Returns:
+        Custom PyOCD path string, or empty string if not set
+    """
+    import json
+    
+    # Try portable config first
+    config_path = PROJECT_ROOT / "config.json"
+    if not config_path.exists():
+        # Try user config directory
+        import platform
+        system = platform.system()
+        if system == "Windows":
+            config_path = Path.home() / "AppData" / "Roaming" / "ArmFlashTool" / "config.json"
+        elif system == "Darwin":
+            config_path = Path.home() / "Library" / "Application Support" / "ArmFlashTool" / "config.json"
+        else:
+            config_path = Path.home() / ".config" / "ArmFlashTool" / "config.json"
+    
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            return config.get("settings", {}).get("pyocd_path", "")
+        except Exception:
+            pass
+    
+    return ""
 
 
 # Check PyOCD availability before proceeding

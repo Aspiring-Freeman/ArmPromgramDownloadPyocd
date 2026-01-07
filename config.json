@@ -8,15 +8,15 @@
         "default_frequency": 10000000,
         "connect_mode": "under-reset",
         "last_target": "stm32h503cbtx",
-        "last_pack": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
+        "last_pack": "D:/其他文件/EmbededSoftware/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
     },
     "ui": {
         "theme": "light",
         "accent_color": "#0078D4",
-        "window_width": 1920,
-        "window_height": 1048,
+        "window_width": 1536,
+        "window_height": 816,
         "window_x": 0,
-        "window_y": 32
+        "window_y": 0
     },
     "recent_files": [
         "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Mcu_Hex_Directories/PwmSimulate/20260106/Simulate.hex"
@@ -33,7 +33,8 @@
         "connect_retries": 2,
         "pack_directory": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM",
         "default_verify": true,
-        "default_reset": true
+        "default_reset": true,
+        "pyocd_path": "D:/其他文件/EmbededSoftware/ArmPromgramDownloadPyocd/Driver/pyOCD/pyocd"
     },
     "recent_packs": [
         "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
