@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-07
+
+### Added
+- New unit tests for pyocd_wrapper module (111 tests total, 100% pass rate)
+  - `test_pyocd_wrapper.py` - PyOCD wrapper tests with mocks
+
+### Changed
+- **[P1 Refactoring]** Split `Core/pyocd_wrapper.py` (888 lines) into modular subpackage:
+  - `Core/pyocd/__init__.py` - Public API exports
+  - `Core/pyocd/base.py` - Enums and dataclasses (ResetType, EraseMode, ConnectMode, ProbeInfo, FlashRegion)
+  - `Core/pyocd/connection.py` - Connection management (connect, disconnect, list_probes)
+  - `Core/pyocd/flash.py` - Flash programming (flash, flash_file)
+  - `Core/pyocd/erase.py` - Erase operations (erase, mass_erase, erase_sector, erase_range)
+  - `Core/pyocd/reset.py` - Reset operations (reset)
+  - `Core/pyocd/wrapper.py` - Main PyOCDWrapper class combining mixins
+- **[P1 Refactoring]** Split `UI/probe_page.py` (878 lines) into modular subpackage:
+  - `UI/probe/__init__.py` - Public API exports
+  - `UI/probe/scanner.py` - ProbeScanner background thread
+  - `UI/probe/worker.py` - ConnectWorker background thread
+  - `UI/probe/preset_manager.py` - PresetManagerMixin for preset operations
+  - `UI/probe/page.py` - Main ProbePage widget
+- Backward compatibility maintained - original import paths still work
+
+### Notes
+- This is a pure refactoring release, no functional changes
+- All existing code using `from Core.pyocd_wrapper import ...` continues to work
+- New code can use `from Core.pyocd import ...` for cleaner imports
+
 ## [1.1.0] - 2026-01-06
 
 ### Added
