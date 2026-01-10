@@ -100,6 +100,13 @@ class ErasePage(QWidget):
         self._worker: Optional[EraseWorker] = None
         self._connected = False
         
+        # Current chip configuration
+        self._flash_start = 0x08000000  # Default STM32
+        self._flash_size = 0x20000      # 128KB default
+        self._sector_size = 0x800       # 2KB default sector size
+        self._target_name = "Unknown"
+        self._pack_device = None        # Actual device from pack
+        
         self._init_ui()
         
     def _init_ui(self):
@@ -108,6 +115,17 @@ class ErasePage(QWidget):
         layout.setSpacing(16)
         
         layout.addWidget(TitleLabel("擦除操作"))
+        
+        # Chip info card (shows current chip flash info)
+        info_card = CardWidget()
+        info_layout = QVBoxLayout(info_card)
+        info_layout.addWidget(StrongBodyLabel("当前芯片配置"))
+        
+        self.chip_info_label = CaptionLabel("未配置芯片，请先在探测页面应用芯片配置")
+        self.chip_info_label.setWordWrap(True)
+        info_layout.addWidget(self.chip_info_label)
+        
+        layout.addWidget(info_card)
         
         # Mode card
         mode_card = CardWidget()
@@ -118,6 +136,11 @@ class ErasePage(QWidget):
         self.chip_radio.setChecked(True)
         self.chip_radio.toggled.connect(self._on_mode_changed)
         mode_layout.addWidget(self.chip_radio)
+        
+        # Full chip erase hint
+        self.chip_erase_hint = CaptionLabel("")
+        self.chip_erase_hint.setStyleSheet("color: #888;")
+        mode_layout.addWidget(self.chip_erase_hint)
         
         self.sector_radio = RadioButton("扇区擦除")
         self.sector_radio.toggled.connect(self._on_mode_changed)
@@ -138,9 +161,15 @@ class ErasePage(QWidget):
         sector_row.addWidget(BodyLabel("扇区号:"))
         self.sector_spin = SpinBox()
         self.sector_spin.setRange(0, 255)
+        self.sector_spin.valueChanged.connect(self._update_sector_info)
         sector_row.addWidget(self.sector_spin)
         sector_row.addStretch()
         sector_layout.addLayout(sector_row)
+        
+        # Sector info hint
+        self.sector_info_label = CaptionLabel("")
+        self.sector_info_label.setWordWrap(True)
+        sector_layout.addWidget(self.sector_info_label)
         
         self.sector_card.hide()
         layout.addWidget(self.sector_card)
@@ -153,17 +182,21 @@ class ErasePage(QWidget):
         range_row = QHBoxLayout()
         range_row.addWidget(BodyLabel("起始地址:"))
         self.start_edit = LineEdit()
-        self.start_edit.setPlaceholderText("0x08000000")
+        self.start_edit.setText(f"0x{self._flash_start:08X}")
         self.start_edit.setMaximumWidth(150)
         range_row.addWidget(self.start_edit)
         
         range_row.addWidget(BodyLabel("结束地址:"))
         self.end_edit = LineEdit()
-        self.end_edit.setPlaceholderText("0x0801FFFF")
+        self.end_edit.setText(f"0x{self._flash_start + self._flash_size - 1:08X}")
         self.end_edit.setMaximumWidth(150)
         range_row.addWidget(self.end_edit)
         range_row.addStretch()
         range_layout.addLayout(range_row)
+        
+        # Add hint label for address range
+        self.range_hint = CaptionLabel("提示: 地址范围将根据当前芯片配置自动更新")
+        range_layout.addWidget(self.range_hint)
         
         self.range_card.hide()
         layout.addWidget(self.range_card)
@@ -222,6 +255,154 @@ class ErasePage(QWidget):
     def set_connected(self, connected: bool):
         self._connected = connected
         self.erase_btn.setEnabled(connected)
+    
+    def _update_sector_info(self):
+        """Update sector info label when sector number changes"""
+        sector_num = self.sector_spin.value()
+        sector_start = self._flash_start + (sector_num * self._sector_size)
+        sector_end = sector_start + self._sector_size - 1
+        sector_kb = self._sector_size / 1024
+        
+        # Check if sector is valid
+        max_sector = (self._flash_size // self._sector_size) - 1 if self._sector_size > 0 else 0
+        
+        if sector_num > max_sector:
+            self.sector_info_label.setText(
+                f"⚠ 扇区号超出范围！最大扇区号: {max_sector}\n"
+                f"当前芯片共 {max_sector + 1} 个扇区"
+            )
+            self.sector_info_label.setStyleSheet("color: #ff6b6b;")
+        else:
+            self.sector_info_label.setText(
+                f"扇区 {sector_num}: 0x{sector_start:08X} - 0x{sector_end:08X} ({sector_kb:.1f}KB)\n"
+                f"有效扇区范围: 0 - {max_sector} (共 {max_sector + 1} 个扇区)"
+            )
+            self.sector_info_label.setStyleSheet("color: #888;")
+    
+    def _update_chip_info_display(self):
+        """Update all chip-related info displays"""
+        flash_kb = self._flash_size // 1024
+        flash_end = self._flash_start + self._flash_size - 1
+        sector_count = self._flash_size // self._sector_size if self._sector_size > 0 else 0
+        sector_kb = self._sector_size / 1024
+        
+        # Build chip info text
+        chip_lines = [f"预设目标: {self._target_name}"]
+        if self._pack_device and self._pack_device.lower() != self._target_name.lower():
+            chip_lines.append(f"Pack设备: {self._pack_device}")
+        chip_lines.append(f"Flash: {flash_kb}KB @ 0x{self._flash_start:08X} - 0x{flash_end:08X}")
+        chip_lines.append(f"扇区: {sector_count} 个, 每个 {sector_kb:.1f}KB")
+        
+        # Update chip info card
+        self.chip_info_label.setText("\n".join(chip_lines))
+        
+        # Update full chip erase hint
+        self.chip_erase_hint.setText(
+            f"    将擦除整个 Flash: 0x{self._flash_start:08X} - 0x{flash_end:08X} ({flash_kb}KB)"
+        )
+        
+        # Update sector spin range
+        max_sector = sector_count - 1 if sector_count > 0 else 0
+        self.sector_spin.setRange(0, max(0, max_sector))
+        
+        # Update sector info
+        self._update_sector_info()
+        
+        # Update range hint
+        self.range_hint.setText(f"当前: {self._target_name} | Flash {flash_kb}KB @ 0x{self._flash_start:08X}")
+    
+    def apply_chip_config(self, chip_config):
+        """Apply chip configuration to update address range.
+        
+        Called when chip configuration changes (from ProbePage or ChipConfigPage).
+        
+        Args:
+            chip_config: ChipConfig dataclass with flash_start, flash_size, etc.
+        """
+        # Get values from config first
+        flash_start = getattr(chip_config, 'flash_start', 0x08000000)
+        flash_size = getattr(chip_config, 'flash_size', 0)
+        sector_size = 0x800  # Default 2KB
+        target_name = getattr(chip_config, 'target', 'Unknown')
+        pack_device_name = None  # Actual device name from pack
+        
+        # Try to get more info from pack
+        if hasattr(chip_config, 'pack_file') and chip_config.pack_file:
+            try:
+                from Core.pack_parser import PackParser
+                from Core.chip_config import normalize_pack_path
+                pack_path = normalize_pack_path(chip_config.pack_file)
+                parser = PackParser(pack_path)
+                pack_info = parser.parse()
+                if pack_info and pack_info.devices:
+                    # First try to find matching device by target name
+                    device = pack_info.get_device(target_name)
+                    
+                    # If not found, try to match by chip_family
+                    if device is None:
+                        chip_family = getattr(chip_config, 'chip_family', '')
+                        if chip_family:
+                            device = pack_info.get_device(chip_family)
+                    
+                    # If still not found, use first device from pack
+                    if device is None and pack_info.devices:
+                        device = pack_info.devices[0]
+                        LOG.info(f"Using first pack device: {device.name}")
+                    
+                    if device:
+                        pack_device_name = device.name
+                        # Only override flash_size if config has 0
+                        if flash_size == 0:
+                            flash_size = device.flash_size
+                        # Only override flash_start if config has default STM32 value
+                        # and pack has different value (likely correct for this chip)
+                        if flash_start == 0x08000000 and device.flash_start != 0x08000000:
+                            flash_start = device.flash_start
+                        # Get sector size from algorithms if available
+                        # FM33 series typically has 512B or 2KB sectors
+                        if 'fm33' in device.name.lower():
+                            sector_size = 0x200  # 512B for FM33
+            except Exception as e:
+                LOG.warning(f"Failed to get flash info from pack: {e}")
+        
+        # Use reasonable defaults if still 0
+        if flash_size == 0:
+            # Try to estimate from target name
+            if '01' in target_name:
+                flash_size = 64 * 1024   # 64KB
+            elif '02' in target_name:
+                flash_size = 128 * 1024  # 128KB
+            elif '04' in target_name:
+                flash_size = 256 * 1024  # 256KB
+            else:
+                flash_size = 128 * 1024  # Default 128KB
+        
+        # Estimate sector size based on flash size if not set from pack
+        if sector_size == 0x800:  # Still default
+            if flash_size <= 64 * 1024:  # <= 64KB
+                sector_size = 0x400  # 1KB
+            elif flash_size <= 256 * 1024:  # <= 256KB
+                sector_size = 0x800  # 2KB
+            elif flash_size <= 1024 * 1024:  # <= 1MB
+                sector_size = 0x1000  # 4KB
+            else:
+                sector_size = 0x4000  # 16KB
+        
+        self._flash_start = flash_start
+        self._flash_size = flash_size
+        self._sector_size = sector_size
+        self._target_name = target_name
+        self._pack_device = pack_device_name
+        
+        # Update UI
+        flash_end = flash_start + flash_size - 1
+        self.start_edit.setText(f"0x{flash_start:08X}")
+        self.end_edit.setText(f"0x{flash_end:08X}")
+        
+        # Update all info displays
+        self._update_chip_info_display()
+        
+        LOG.info(f"Erase page config applied: {target_name} Flash 0x{flash_start:08X} ({flash_size // 1024}KB, sector {sector_size}B)")
         
     def _start_erase(self):
         if self.chip_radio.isChecked():
@@ -234,6 +415,17 @@ class ErasePage(QWidget):
             start_addr = None
             end_addr = None
             sector = self.sector_spin.value()
+            
+            # Validate sector number
+            max_sector = (self._flash_size // self._sector_size) - 1 if self._sector_size > 0 else 0
+            if sector > max_sector:
+                InfoBar.error(
+                    "扇区号无效", 
+                    f"扇区号 {sector} 超出范围，最大扇区号为 {max_sector}",
+                    position=InfoBarPosition.TOP_RIGHT,
+                    parent=self.window(), duration=5000
+                )
+                return
         else:
             mode = "range"
             try:
@@ -242,8 +434,31 @@ class ErasePage(QWidget):
                 start_addr = int(start_text, 16) if start_text.startswith('0x') else int(start_text)
                 end_addr = int(end_text, 16) if end_text.startswith('0x') else int(end_text)
                 sector = None
+                
+                # Validate address range
+                flash_end = self._flash_start + self._flash_size - 1
+                if start_addr < self._flash_start or end_addr > flash_end:
+                    InfoBar.warning(
+                        "地址范围警告", 
+                        f"地址范围超出 Flash 区域 (0x{self._flash_start:08X} - 0x{flash_end:08X})",
+                        position=InfoBarPosition.TOP_RIGHT,
+                        parent=self.window(), duration=5000
+                    )
+                if start_addr > end_addr:
+                    InfoBar.error(
+                        "地址无效", 
+                        "起始地址不能大于结束地址",
+                        position=InfoBarPosition.TOP_RIGHT,
+                        parent=self.window(), duration=5000
+                    )
+                    return
             except ValueError:
-                self.log_message.emit("无效的地址")
+                InfoBar.error(
+                    "地址格式错误", 
+                    "请输入有效的十六进制地址 (如 0x00000000)",
+                    position=InfoBarPosition.TOP_RIGHT,
+                    parent=self.window(), duration=5000
+                )
                 return
                 
         self.progress_bar.setValue(0)

@@ -104,17 +104,11 @@ class MainWindow(FluentWindow):
         
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.log_message.connect(self._log)
-        self.chip_config_page.preset_selected.connect(self._on_chip_config_applied)
-        
-        self.settings_page.theme_changed.connect(self._apply_theme)
     
     def _on_chip_config_applied(self, chip_config):
         """Handle chip config applied from probe page or chip config page"""
-        # Apply to probe page (sets target, frequency, mode, pack)
-        # Don't show notification here since the source page already shows one
-        if hasattr(self.probe_page, 'apply_chip_config'):
-            self.probe_page.apply_chip_config(chip_config, show_notification=False)
-        # Apply to flash page (sets address)
+        # Only apply to flash page (sets address)
+        # Probe page settings (target, frequency, mode) are managed by user's "应用预设" button
         self.flash_page.apply_chip_config(chip_config)
         # Apply to erase page if needed
         if hasattr(self.erase_page, 'apply_chip_config'):

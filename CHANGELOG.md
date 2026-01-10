@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-01-10
+
+### Added
+- **CMSIS-Pack Parser**: New `Core/pack_parser.py` module for parsing CMSIS-Pack (.pack) files
+  - Extract device information (flash start, flash size, RAM info)
+  - Support for Pack vendor and version info
+- **Chip Detection Feature**: Detect connected chip model via CPUID register
+  - New `ChipDetectDialog` for chip detection with configurable options
+  - Reads CPUID (0xE000ED00), parses core type and architecture
+  - Matches detected chip against Pack targets
+  - Clear separation of "Chip Info", "Pack Targets", and "Current Config" in results
+- **UI Redesign**: Probe page chip configuration with three RadioButton sources
+  - File import: Load configuration from JSON file
+  - Preset selection: Choose from saved presets
+  - Pack import: Import from CMSIS-Pack device definitions
+- **Erase Page Improvements**:
+  - Added comprehensive chip configuration display card
+  - Sector information display with address ranges
+  - Address range validation with warnings
+  - Auto-update sector info based on chip config
+- **Preset Management**:
+  - Delete preset button with confirmation dialog
+  - Export dialog "use default filename" checkbox
+  - Preset name auto-sync with export filename
+
+### Changed
+- Target combo increased width (200 → 250) for better readability
+- Recent files display shortened paths with ellipsis for long paths
+- Flash address now correctly uses Pack-sourced values in saved presets
+
+### Fixed
+- Duplicate signal connections in main_window.py (config_applied, preset_selected, theme_changed)
+- qfluentwidgets ComboBox itemData() returns None - implemented `_preset_keys` dict mapping
+- Theme styling for ChipDetectDialog in light/dark modes
+- Recent files selection using `_recent_files_map` for full path lookup
+- Removed unused imports (SpinBox in flash_page.py)
+
 ## [1.3.0] - 2026-01-07
 
 ### Added

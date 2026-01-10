@@ -12,7 +12,7 @@ from Core.pyocd.base import (
     ProbeInfo,
     FlashRegion,
 )
-from Core.pyocd.wrapper import PyOCDWrapper
+from Core.pyocd.wrapper import PyOCDWrapper, ChipDetectionResult
 
 __all__ = [
     'ResetType',
@@ -21,4 +21,5 @@ __all__ = [
     'ProbeInfo',
     'FlashRegion',
     'PyOCDWrapper',
+    'ChipDetectionResult',
 ]

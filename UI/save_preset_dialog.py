@@ -112,6 +112,7 @@ class SavePresetDialog(QDialog):
         # Preset name
         self.name_edit = LineEdit()
         self.name_edit.setPlaceholderText("例如: STM32H503 开发板")
+        self.name_edit.textChanged.connect(self._on_name_changed)
         add_row("预设名称:", self.name_edit)
         
         # Vendor - editable combo allows custom input
@@ -251,6 +252,21 @@ class SavePresetDialog(QDialog):
         export_row.addWidget(self.export_btn)
         layout.addLayout(export_row)
         
+        # Use default filename checkbox
+        filename_row = QHBoxLayout()
+        filename_row.setSpacing(10)
+        lbl_placeholder = BodyLabel("")
+        lbl_placeholder.setMinimumWidth(75)
+        filename_row.addWidget(lbl_placeholder)
+        self.use_default_filename = CheckBox("使用预设名称作为文件名")
+        self.use_default_filename.setChecked(True)
+        self.use_default_filename.setEnabled(False)
+        self.use_default_filename.setFixedHeight(36)
+        self.use_default_filename.stateChanged.connect(self._on_default_filename_changed)
+        filename_row.addWidget(self.use_default_filename)
+        filename_row.addStretch()
+        layout.addLayout(filename_row)
+        
         # Quick path buttons
         path_row = QHBoxLayout()
         path_row.setSpacing(10)
@@ -293,6 +309,46 @@ class SavePresetDialog(QDialog):
         btn_layout.addWidget(self.save_btn)
         
         layout.addLayout(btn_layout)
+    
+    def _on_name_changed(self, new_name: str):
+        """Update export filename when preset name changes (if using default filename)"""
+        if not self.use_default_filename.isChecked():
+            return
+        if not self.export_to_file.isChecked() and not self._export_only:
+            return
+        
+        current_path = self.export_path_edit.text().strip()
+        if not current_path:
+            return
+        
+        # Update filename in path
+        import os
+        dir_path = os.path.dirname(current_path)
+        if dir_path and new_name.strip():
+            safe_name = new_name.strip().replace(' ', '_').replace('/', '_').replace('\\', '_')
+            new_path = os.path.join(dir_path, f"{safe_name}.json")
+            self.export_path_edit.setText(new_path)
+    
+    def _sync_export_filename(self):
+        """Sync export filename with preset name"""
+        name = self.name_edit.text().strip()
+        if not name:
+            return
+        current_path = self.export_path_edit.text().strip()
+        if not current_path:
+            return
+        import os
+        dir_path = os.path.dirname(current_path)
+        if dir_path:
+            safe_name = name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+            new_path = os.path.join(dir_path, f"{safe_name}.json")
+            self.export_path_edit.setText(new_path)
+    
+    def _on_default_filename_changed(self, state):
+        """Handle default filename checkbox change"""
+        if state == Qt.CheckState.Checked.value:
+            # Update filename to match preset name
+            self._sync_export_filename()
     
     def _on_accept(self):
         """Validate and accept dialog"""
@@ -406,6 +462,11 @@ class SavePresetDialog(QDialog):
         if desc:
             self.desc_edit.setText(desc)
         
+        # Notes
+        notes = settings.get('notes', '')
+        if notes:
+            self.notes_edit.setText(notes)
+        
         # Load last export path
         last_path = config.get('last_preset_export_path', '')
         if last_path:
@@ -429,6 +490,11 @@ class SavePresetDialog(QDialog):
         self.export_btn.setEnabled(enabled)
         self.doc_btn.setEnabled(enabled)
         self.package_btn.setEnabled(enabled)
+        self.use_default_filename.setEnabled(enabled)
+        
+        # If enabling export and use_default_filename is checked, sync filename
+        if enabled and self.use_default_filename.isChecked():
+            self._sync_export_filename()
     
     def _browse_pack(self):
         """Browse for pack file"""

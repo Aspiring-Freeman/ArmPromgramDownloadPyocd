@@ -25,6 +25,7 @@ from qfluentwidgets import (
 )
 
 from Core.chip_config import ChipConfigManager, ChipConfig, BUILTIN_PRESETS, get_default_flash_start
+from Core.pack_parser import PackParser, PackInfo, DeviceInfo
 
 LOG = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class EditPresetDialog(QDialog):
         super().__init__(parent)
         self._config = config
         self._is_new = config is None
+        self._pack_info: Optional[PackInfo] = None  # Cached pack info
         
         title = "新建芯片预设" if self._is_new else f"编辑预设: {config.name}"
         self.setWindowTitle(title)
@@ -118,12 +120,28 @@ class EditPresetDialog(QDialog):
         pack_row = QHBoxLayout()
         pack_row.addWidget(BodyLabel("Pack文件:"))
         self.pack_edit = LineEdit()
-        self.pack_edit.setPlaceholderText("可选 .pack 文件路径")
+        self.pack_edit.setPlaceholderText("可选: 浏览Pack可自动填充芯片信息")
         pack_row.addWidget(self.pack_edit)
         self.pack_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
         self.pack_btn.clicked.connect(self._browse_pack)
         pack_row.addWidget(self.pack_btn)
         layout.addLayout(pack_row)
+        
+        # Pack device selection row (only shown when pack is loaded)
+        self.pack_device_row = QHBoxLayout()
+        self.pack_device_row.addWidget(BodyLabel("选择芯片:"))
+        self.pack_device_combo = ComboBox()
+        self.pack_device_combo.setMinimumWidth(250)
+        self.pack_device_combo.setPlaceholderText("从Pack中选择...")
+        self.pack_device_combo.setEnabled(False)
+        self.pack_device_combo.currentIndexChanged.connect(self._on_pack_device_changed)
+        self.pack_device_row.addWidget(self.pack_device_combo)
+        self.pack_device_row.addStretch()
+        layout.addLayout(self.pack_device_row)
+        
+        # Pack info label
+        self.pack_info_label = CaptionLabel("")
+        layout.addWidget(self.pack_info_label)
         
         # Description
         desc_row = QHBoxLayout()
@@ -165,6 +183,103 @@ class EditPresetDialog(QDialog):
         path, _ = QFileDialog.getOpenFileName(self, "选择 Pack", "", "CMSIS-Pack (*.pack)")
         if path:
             self.pack_edit.setText(path)
+            self._parse_pack_file(path)
+    
+    def _parse_pack_file(self, pack_path: str):
+        """Parse pack file and populate device combo"""
+        try:
+            parser = PackParser(pack_path)
+            self._pack_info = parser.parse()
+            
+            if self._pack_info and self._pack_info.devices:
+                self.pack_device_combo.clear()
+                self.pack_device_combo.addItem("-- 选择芯片以填充表单 --")
+                
+                for dev in self._pack_info.devices:
+                    # Show device name with flash info
+                    label = f"{dev.name} (Flash: 0x{dev.flash_start:08X}, {dev.flash_size // 1024}KB)"
+                    self.pack_device_combo.addItem(label, dev.name)
+                
+                self.pack_device_combo.setEnabled(True)
+                self.pack_info_label.setText(
+                    f"✓ {self._pack_info.vendor}.{self._pack_info.name} v{self._pack_info.version} - "
+                    f"包含 {len(self._pack_info.devices)} 个芯片"
+                )
+            else:
+                self.pack_device_combo.clear()
+                self.pack_device_combo.setEnabled(False)
+                self.pack_info_label.setText("⚠ 无法解析Pack文件或没有设备信息")
+                
+        except Exception as e:
+            LOG.exception(f"Error parsing pack file: {e}")
+            self.pack_device_combo.clear()
+            self.pack_device_combo.setEnabled(False)
+            self.pack_info_label.setText(f"⚠ 解析失败: {str(e)}")
+    
+    def _on_pack_device_changed(self, index: int):
+        """Auto-fill form when pack device is selected"""
+        if not self._pack_info or index <= 0:
+            return
+        
+        dev_name = self.pack_device_combo.itemData(index)
+        if not dev_name:
+            return
+            
+        device = self._pack_info.get_device(dev_name)
+        
+        if device:
+            # Fill form with device info
+            if not self.name_edit.text().strip():
+                self.name_edit.setText(f"{device.name} 预设")
+            
+            # Set vendor
+            vendor = device.vendor
+            idx = self.vendor_combo.findText(vendor)
+            if idx >= 0:
+                self.vendor_combo.setCurrentIndex(idx)
+            else:
+                self.vendor_combo.setCurrentText(vendor)
+            
+            # Set family
+            if device.sub_family:
+                self.family_edit.setText(device.sub_family)
+            elif device.family:
+                self.family_edit.setText(device.family)
+            
+            # Set target (lowercase for PyOCD compatibility)
+            self.target_edit.setText(device.name.lower())
+            
+            # Set memory addresses
+            self.flash_edit.setText(f"0x{device.flash_start:08X}")
+            self.ram_edit.setText(f"0x{device.ram_start:08X}")
+            
+            # Set debug frequency from pack
+            if device.debug_clock:
+                freq = device.debug_clock
+                if freq >= 1000000:
+                    self.freq_combo.setText(f"{freq // 1000000} MHz")
+                else:
+                    self.freq_combo.setText(f"{freq // 1000} kHz")
+            
+            # Set description
+            if device.description and not self.desc_edit.text().strip():
+                # Truncate if too long
+                desc = device.description[:100] + "..." if len(device.description) > 100 else device.description
+                self.desc_edit.setText(desc.replace('\n', ' ').strip())
+            
+            # Add notes about memory
+            notes_parts = []
+            if device.flash_size:
+                notes_parts.append(f"Flash: {device.flash_size // 1024}KB")
+            if device.ram_size:
+                notes_parts.append(f"RAM: {device.ram_size // 1024}KB")
+            if device.core:
+                notes_parts.append(f"Core: {device.core}")
+            if notes_parts:
+                self.notes_edit.setText(" | ".join(notes_parts))
+            
+            InfoBar.success("成功", f"已从Pack加载: {device.name}", parent=self,
+                          position=InfoBarPosition.TOP_RIGHT)
     
     def _load_config(self, config: ChipConfig):
         """Load config into form"""
@@ -202,6 +317,14 @@ class EditPresetDialog(QDialog):
         self.pack_edit.setText(config.pack_file)
         self.desc_edit.setText(config.description)
         self.notes_edit.setText(config.notes)
+        
+        # If pack file exists, parse it to enable device selection
+        if config.pack_file:
+            from pathlib import Path
+            from Core.chip_config import to_absolute_path
+            pack_path = to_absolute_path(config.pack_file)
+            if Path(pack_path).exists():
+                self._parse_pack_file(pack_path)
     
     def get_config(self) -> Optional[ChipConfig]:
         """Get config from form"""

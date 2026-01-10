@@ -8,7 +8,7 @@
         "default_frequency": 10000000,
         "connect_mode": "under-reset",
         "last_target": "fm33lg04x",
-        "last_pack": "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
+        "last_pack": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack"
     },
     "ui": {
         "theme": "dark",
@@ -20,6 +20,7 @@
     },
     "recent_files": [
         "/home/noah/nextcloud_crunchbits/Work/QianFeng/Work/Software/Project/InProgress/2025/small_caliber_uwm_tester/build/SmallCaliberUWMTester.hex",
+        "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Mcu_Hex_Directories/FMLG048_Bootloader/fm33lg0xx_bootloader.hex",
         "Mcu_Hex_Directories/PwmSimulate/20260106/Simulate.hex"
     ],
     "recent_targets": [
@@ -39,8 +40,9 @@
         "pyocd_path": "Driver/pyOCD"
     },
     "recent_packs": [
+        "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack",
         "Package/Vendor/STM/Keil.STM32H5xx_DFP.2.1.0.pack"
     ],
     "last_preset_import_dir": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs",
-    "last_preset_export_path": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs/FM33LG04X.json"
+    "last_preset_export_path": "/home/noah/Program/Python_software/ArmPromgramDownloadPyocd/Doc/ChipConfigs/FLG048_APP.json"
 }

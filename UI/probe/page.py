@@ -21,6 +21,7 @@ from qfluentwidgets import (
 
 from Core.pyocd_wrapper import ConnectMode, ResetType
 from Core.chip_config import ChipConfigManager, ChipConfig, get_default_flash_start
+from Core.pack_parser import PackParser, PackInfo
 
 from UI.probe.scanner import ProbeScanner
 from UI.probe.worker import ConnectWorker
@@ -56,6 +57,7 @@ class ProbePage(PresetManagerMixin, QWidget):
         # Chip config manager
         self._chip_config_mgr = ChipConfigManager()
         self._current_chip_config: Optional[ChipConfig] = None
+        self._pack_info: Optional[PackInfo] = None  # Cached pack info
         
         self._init_ui()
         self._load_targets()
@@ -74,13 +76,9 @@ class ProbePage(PresetManagerMixin, QWidget):
         probe_card = self._create_probe_card()
         layout.addWidget(probe_card)
         
-        # Chip Preset Card
+        # Chip Configuration Card (combines preset and manual config)
         preset_card = self._create_preset_card()
         layout.addWidget(preset_card)
-        
-        # Target card
-        target_card = self._create_target_card()
-        layout.addWidget(target_card)
         
         # Options card
         opt_card = self._create_options_card()
@@ -102,6 +100,13 @@ class ProbePage(PresetManagerMixin, QWidget):
         self.scan_btn = ToolButton(FluentIcon.SYNC)
         self.scan_btn.clicked.connect(self._scan_probes)
         header.addWidget(self.scan_btn)
+        
+        # 芯片检测按钮
+        self.detect_chip_btn = PushButton("检测芯片", icon=FluentIcon.SEARCH)
+        self.detect_chip_btn.setToolTip("连接芯片并读取CPU信息，帮助识别芯片型号")
+        self.detect_chip_btn.clicked.connect(self._detect_chip)
+        header.addWidget(self.detect_chip_btn)
+        
         header.addStretch()
         probe_layout.addLayout(header)
         
@@ -115,87 +120,255 @@ class ProbePage(PresetManagerMixin, QWidget):
         return probe_card
     
     def _create_preset_card(self) -> CardWidget:
-        """Create the chip preset management card"""
+        """Create the chip configuration card with clear mode selection"""
         preset_card = CardWidget()
         preset_layout = QVBoxLayout(preset_card)
         
+        # Header
         preset_header = QHBoxLayout()
-        preset_header.addWidget(StrongBodyLabel("芯片预设配置"))
-        
-        self.import_preset_btn = ToolButton(FluentIcon.DOWNLOAD)
-        self.import_preset_btn.setToolTip("导入预设")
-        self.import_preset_btn.clicked.connect(self._import_preset)
-        preset_header.addWidget(self.import_preset_btn)
-        
-        self.export_preset_btn = ToolButton(FluentIcon.UP)
-        self.export_preset_btn.setToolTip("导出预设")
-        self.export_preset_btn.clicked.connect(self._export_preset)
-        preset_header.addWidget(self.export_preset_btn)
-        
-        self.save_preset_btn = ToolButton(FluentIcon.SAVE)
-        self.save_preset_btn.setToolTip("保存当前设置为预设")
-        self.save_preset_btn.clicked.connect(self._save_current_as_preset)
-        preset_header.addWidget(self.save_preset_btn)
-        
+        preset_header.addWidget(StrongBodyLabel("芯片配置"))
         preset_header.addStretch()
         preset_layout.addLayout(preset_header)
         
-        # Vendor filter
-        vendor_row = QHBoxLayout()
-        vendor_row.addWidget(BodyLabel("厂商:"))
+        # === 配置来源选择（三种模式）===
+        from qfluentwidgets import RadioButton
+        
+        source_label = CaptionLabel("选择配置来源:")
+        preset_layout.addWidget(source_label)
+        
+        # 模式1: 从文件导入（用户自定义配置）
+        self.source_file_radio = RadioButton("从文件导入 (自定义配置，包含完整的Flash地址等信息)")
+        self.source_file_radio.toggled.connect(self._on_source_changed)
+        preset_layout.addWidget(self.source_file_radio)
+        
+        self.file_widget = QWidget()
+        file_inner = QHBoxLayout(self.file_widget)
+        file_inner.setContentsMargins(20, 5, 0, 5)
+        self.file_path_edit = LineEdit()
+        self.file_path_edit.setPlaceholderText("选择 JSON 配置文件...")
+        self.file_path_edit.setReadOnly(True)
+        file_inner.addWidget(self.file_path_edit)
+        self.file_browse_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
+        self.file_browse_btn.clicked.connect(self._browse_config_file)
+        file_inner.addWidget(self.file_browse_btn)
+        self.file_apply_btn = PushButton("应用", icon=FluentIcon.ACCEPT)
+        self.file_apply_btn.clicked.connect(self._apply_file_config)
+        file_inner.addWidget(self.file_apply_btn)
+        self.file_widget.hide()
+        preset_layout.addWidget(self.file_widget)
+        
+        # 模式2: 从预设选择
+        self.source_preset_radio = RadioButton("从预设选择 (内置预设或之前保存的用户预设)")
+        self.source_preset_radio.setChecked(True)
+        self.source_preset_radio.toggled.connect(self._on_source_changed)
+        preset_layout.addWidget(self.source_preset_radio)
+        
+        self.preset_widget = QWidget()
+        preset_inner = QHBoxLayout(self.preset_widget)
+        preset_inner.setContentsMargins(20, 5, 0, 5)
+        
+        preset_inner.addWidget(BodyLabel("厂商:"))
         self.vendor_combo = ComboBox()
-        self.vendor_combo.setMinimumWidth(150)
+        self.vendor_combo.setMinimumWidth(120)
         self.vendor_combo.currentTextChanged.connect(self._on_vendor_changed)
-        vendor_row.addWidget(self.vendor_combo)
+        preset_inner.addWidget(self.vendor_combo)
         
-        vendor_row.addWidget(BodyLabel("预设:"))
+        preset_inner.addWidget(BodyLabel("预设:"))
         self.preset_combo = ComboBox()
-        self.preset_combo.setMinimumWidth(250)
+        self.preset_combo.setMinimumWidth(200)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        vendor_row.addWidget(self.preset_combo)
+        preset_inner.addWidget(self.preset_combo)
         
-        self.apply_preset_btn = PushButton("应用预设", icon=FluentIcon.ACCEPT)
+        self.apply_preset_btn = PushButton("应用", icon=FluentIcon.ACCEPT)
         self.apply_preset_btn.clicked.connect(self._apply_preset)
-        vendor_row.addWidget(self.apply_preset_btn)
-        vendor_row.addStretch()
-        preset_layout.addLayout(vendor_row)
+        preset_inner.addWidget(self.apply_preset_btn)
         
-        # Preset info label
-        self.preset_info = CaptionLabel("")
+        self.delete_preset_btn = ToolButton(FluentIcon.DELETE)
+        self.delete_preset_btn.setToolTip("删除当前预设")
+        self.delete_preset_btn.clicked.connect(self._delete_preset)
+        preset_inner.addWidget(self.delete_preset_btn)
+        
+        preset_inner.addStretch()
+        preset_layout.addWidget(self.preset_widget)
+        
+        # 模式3: 从 Pack 导入
+        self.source_pack_radio = RadioButton("从 Pack 导入 (读取芯片信息，Flash地址为芯片默认值)")
+        self.source_pack_radio.toggled.connect(self._on_source_changed)
+        preset_layout.addWidget(self.source_pack_radio)
+        
+        self.pack_widget = QWidget()
+        pack_inner = QVBoxLayout(self.pack_widget)
+        pack_inner.setContentsMargins(20, 5, 0, 5)
+        
+        pack_row1 = QHBoxLayout()
+        pack_row1.addWidget(BodyLabel("Pack文件:"))
+        self.pack_edit = LineEdit()
+        self.pack_edit.setPlaceholderText("选择 CMSIS-Pack 文件 (.pack)")
+        pack_row1.addWidget(self.pack_edit)
+        self.pack_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
+        self.pack_btn.clicked.connect(self._browse_pack)
+        pack_row1.addWidget(self.pack_btn)
+        pack_inner.addLayout(pack_row1)
+        
+        pack_row2 = QHBoxLayout()
+        pack_row2.addWidget(BodyLabel("选择芯片:"))
+        self.pack_device_combo = ComboBox()
+        self.pack_device_combo.setMinimumWidth(250)
+        self.pack_device_combo.setPlaceholderText("先浏览Pack文件...")
+        self.pack_device_combo.setEnabled(False)
+        pack_row2.addWidget(self.pack_device_combo)
+        self.pack_apply_btn = PushButton("应用", icon=FluentIcon.ACCEPT)
+        self.pack_apply_btn.clicked.connect(self._apply_pack_config)
+        self.pack_apply_btn.setEnabled(False)
+        pack_row2.addWidget(self.pack_apply_btn)
+        pack_row2.addStretch()
+        pack_inner.addLayout(pack_row2)
+        
+        self.pack_info_label = CaptionLabel("")
+        pack_inner.addWidget(self.pack_info_label)
+        
+        self.pack_widget.hide()
+        preset_layout.addWidget(self.pack_widget)
+        
+        # === 当前配置信息显示 ===
+        self.preset_info = CaptionLabel("💡 从预设选择芯片配置")
         preset_layout.addWidget(self.preset_info)
+        
+        # === 导出/保存按钮 ===
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        
+        self.export_preset_btn = PushButton("导出配置", icon=FluentIcon.UP)
+        self.export_preset_btn.setToolTip("将当前配置导出到文件")
+        self.export_preset_btn.clicked.connect(self._export_preset)
+        btn_row.addWidget(self.export_preset_btn)
+        
+        self.save_preset_btn = PushButton("保存为预设", icon=FluentIcon.SAVE)
+        self.save_preset_btn.setToolTip("将当前配置保存为用户预设")
+        self.save_preset_btn.clicked.connect(self._save_current_as_preset)
+        btn_row.addWidget(self.save_preset_btn)
+        
+        preset_layout.addLayout(btn_row)
         
         return preset_card
     
-    def _create_target_card(self) -> CardWidget:
-        """Create the target chip selection card"""
-        target_card = CardWidget()
-        target_layout = QVBoxLayout(target_card)
-        target_layout.addWidget(StrongBodyLabel("目标芯片"))
+    def _on_source_changed(self, checked: bool):
+        """Handle configuration source change"""
+        # Hide all
+        self.file_widget.hide()
+        self.preset_widget.hide()
+        self.pack_widget.hide()
         
-        self.target_search = SearchLineEdit()
-        self.target_search.setPlaceholderText("搜索芯片...")
-        self.target_search.textChanged.connect(self._filter_targets)
-        target_layout.addWidget(self.target_search)
+        # Show selected
+        if self.source_file_radio.isChecked():
+            self.file_widget.show()
+            self.preset_info.setText("💡 从文件导入：加载之前导出的完整配置，包含自定义Flash地址")
+        elif self.source_preset_radio.isChecked():
+            self.preset_widget.show()
+            self.preset_info.setText("💡 从预设选择：使用内置或用户保存的预设配置")
+        elif self.source_pack_radio.isChecked():
+            self.pack_widget.show()
+            self.preset_info.setText("💡 从Pack导入：读取芯片默认配置，如需修改Flash地址请到烧录页面调整")
+    
+    def _browse_config_file(self):
+        """Browse for config JSON file"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择配置文件", "", "JSON Files (*.json)")
+        if path:
+            self.file_path_edit.setText(path)
+    
+    def _apply_file_config(self):
+        """Apply configuration from file"""
+        file_path = self.file_path_edit.text().strip()
+        if not file_path:
+            InfoBar.warning("提示", "请先选择配置文件", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
+            return
         
-        row = QHBoxLayout()
-        self.target_combo = ComboBox()
-        self.target_combo.setMinimumWidth(300)
-        row.addWidget(self.target_combo)
-        row.addStretch()
-        target_layout.addLayout(row)
+        # Use existing import logic
+        result = self._chip_config_mgr.import_preset(file_path)
+        if result:
+            self._load_presets()
+            config = self._chip_config_mgr.get_preset(result)
+            if config:
+                self._current_chip_config = config
+                self._apply_config_to_ui(config)
+                self.config_applied.emit(config)
+                InfoBar.success("成功", f"已应用配置: {config.name}", parent=self.window(),
+                               position=InfoBarPosition.TOP_RIGHT)
+        else:
+            InfoBar.error("失败", "导入配置失败", parent=self.window(),
+                         position=InfoBarPosition.TOP_RIGHT)
+    
+    def _apply_pack_config(self):
+        """Apply configuration from Pack device selection"""
+        if not self._pack_info:
+            return
         
-        # Pack file
-        pack_row = QHBoxLayout()
-        pack_row.addWidget(BodyLabel("CMSIS-Pack:"))
-        self.pack_edit = LineEdit()
-        self.pack_edit.setPlaceholderText("可选: .pack 文件")
-        pack_row.addWidget(self.pack_edit)
-        self.pack_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
-        self.pack_btn.clicked.connect(self._browse_pack)
-        pack_row.addWidget(self.pack_btn)
-        target_layout.addLayout(pack_row)
+        idx = self.pack_device_combo.currentIndex()
+        if idx < 0:
+            InfoBar.warning("提示", "请先选择芯片", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
+            return
         
-        return target_card
+        dev_name = self.pack_device_combo.itemData(idx)
+        if not dev_name:
+            dev_name = self.pack_device_combo.currentText().split(" (")[0]
+        
+        device = self._pack_info.get_device(dev_name)
+        if not device:
+            InfoBar.warning("提示", f"未找到芯片: {dev_name}", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
+            return
+        
+        # Create config from Pack device
+        config = ChipConfig(
+            name=f"{device.name} (从Pack)",
+            vendor=self._pack_info.vendor,
+            chip_family=device.family or device.name[:8],
+            target=device.name.lower(),
+            flash_start=device.flash_start or 0,
+            flash_size=device.flash_size or 0,
+            ram_start=device.ram_start or 0x20000000,
+            ram_size=device.ram_size or 0,
+            default_frequency=device.debug_clock or 1000000,
+            connect_mode="under-reset",
+            pack_file=self.pack_edit.text(),
+        )
+        
+        self._current_chip_config = config
+        self._apply_config_to_ui(config)
+        self.config_applied.emit(config)
+        
+        flash_kb = device.flash_size // 1024 if device.flash_size else 0
+        self.preset_info.setText(
+            f"✓ 已应用: {device.name} | Flash: 0x{device.flash_start:08X} ({flash_kb}KB) | "
+            f"⚠ 如需调整Flash地址，请到烧录页面修改"
+        )
+        InfoBar.success("成功", f"已应用: {device.name}", parent=self.window(),
+                       position=InfoBarPosition.TOP_RIGHT)
+    
+    def _apply_config_to_ui(self, config: ChipConfig):
+        """Apply config to UI elements (target, freq, mode)"""
+        # Find and set target
+        target_idx = self.target_combo.findText(config.target)
+        if target_idx >= 0:
+            self.target_combo.setCurrentIndex(target_idx)
+        else:
+            # Filter and find
+            self.target_search.setText(config.target)
+        
+        # Set frequency
+        freq = config.default_frequency
+        if freq >= 1000000:
+            self.freq_combo.setText(f"{freq // 1000000} MHz")
+        else:
+            self.freq_combo.setText(f"{freq // 1000} kHz")
+        
+        # Set connect mode
+        mode_map = {"under-reset": 0, "halt": 1, "pre-reset": 2, "attach": 3}
+        mode_idx = mode_map.get(config.connect_mode.lower(), 0)
+        self.mode_combo.setCurrentIndex(mode_idx)
     
     def _create_options_card(self) -> CardWidget:
         """Create the connection options card"""
@@ -203,11 +376,26 @@ class ProbePage(PresetManagerMixin, QWidget):
         opt_layout = QVBoxLayout(opt_card)
         opt_layout.addWidget(StrongBodyLabel("连接选项"))
         
+        # Target selection row
+        target_row = QHBoxLayout()
+        target_row.addWidget(BodyLabel("目标芯片:"))
+        self.target_search = SearchLineEdit()
+        self.target_search.setPlaceholderText("搜索...")
+        self.target_search.setMinimumWidth(120)
+        self.target_search.textChanged.connect(self._filter_targets)
+        target_row.addWidget(self.target_search)
+        self.target_combo = ComboBox()
+        self.target_combo.setMinimumWidth(250)
+        target_row.addWidget(self.target_combo)
+        target_row.addStretch()
+        opt_layout.addLayout(target_row)
+        
+        # Frequency and mode row
         opt_row = QHBoxLayout()
         opt_row.addWidget(BodyLabel("SWD频率:"))
         self.freq_combo = EditableComboBox()
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
-        self.freq_combo.setText("100 kHz")  # 默认 100 kHz (最稳定)
+        self.freq_combo.setText("1 MHz")
         self.freq_combo.setPlaceholderText("输入或选择频率")
         opt_row.addWidget(self.freq_combo)
         
@@ -305,6 +493,56 @@ class ProbePage(PresetManagerMixin, QWidget):
         probes = self._wrapper.list_probes()
         self._update_probe_list(probes)
         self.log_message.emit(f"发现 {len(probes)} 个探针")
+    
+    def _detect_chip(self):
+        """Open chip detection dialog"""
+        from UI.chip_detect_dialog import ChipDetectDialog
+        
+        # Get current settings
+        probe_id = None
+        if self.probe_list.currentItem():
+            text = self.probe_list.currentItem().text()
+            if "[" in text and "]" in text:
+                probe_id = text.split("[")[1].split("]")[0].replace("...", "")
+        
+        # Get pack path from various sources
+        pack_path = self.pack_edit.text().strip()
+        if not pack_path and self._current_chip_config and self._current_chip_config.pack_file:
+            from Core.chip_config import normalize_pack_path
+            pack_path = normalize_pack_path(self._current_chip_config.pack_file)
+        
+        # Get target hint
+        target_hint = self.target_combo.currentText() or ""
+        
+        # Get frequency
+        freq_text = self.freq_combo.text().strip().lower()
+        frequency = 1000000
+        try:
+            if 'mhz' in freq_text:
+                frequency = int(float(freq_text.replace('mhz', '').strip()) * 1000000)
+            elif 'khz' in freq_text:
+                frequency = int(float(freq_text.replace('khz', '').strip()) * 1000)
+        except:
+            pass
+        
+        # Open dialog
+        dialog = ChipDetectDialog(
+            self._wrapper,
+            parent=self.window(),
+            initial_pack=pack_path,
+            initial_target=target_hint,
+            initial_frequency=frequency,
+            probe_id=probe_id
+        )
+        dialog.exec()
+        
+        # Log result
+        result = dialog.get_result()
+        if result and result.success:
+            self.log_message.emit(f"芯片检测完成: {result.core_type}")
+            if result.matched_targets:
+                for t in result.matched_targets:
+                    self.log_message.emit(f"  {t}")
         
     def _update_probe_list(self, probes):
         """Update the probe list UI"""
@@ -333,6 +571,10 @@ class ProbePage(PresetManagerMixin, QWidget):
         last_pack = self._config.get_last_pack()
         if last_pack:
             self.pack_edit.setText(last_pack)
+            # Parse the pack file to enable device selection
+            from pathlib import Path
+            if Path(last_pack).exists():
+                self._parse_pack_file(last_pack)
             
         last_freq = self._config.get_last_frequency()
         freq_text_map = {100000: "100 kHz", 500000: "500 kHz", 1000000: "1 MHz", 
@@ -370,6 +612,64 @@ class ProbePage(PresetManagerMixin, QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "选择 Pack", "", "CMSIS-Pack (*.pack)")
         if path:
             self.pack_edit.setText(path)
+            self._parse_pack_file(path)
+    
+    def _parse_pack_file(self, pack_path: str):
+        """Parse pack file and populate device combo"""
+        try:
+            parser = PackParser(pack_path)
+            self._pack_info = parser.parse()
+            
+            if self._pack_info and self._pack_info.devices:
+                # Store pack devices
+                self._pack_devices = {dev.name.lower(): dev for dev in self._pack_info.devices}
+                
+                # Populate pack device combo
+                self.pack_device_combo.clear()
+                for dev in self._pack_info.devices:
+                    flash_kb = dev.flash_size // 1024 if dev.flash_size else 0
+                    label = f"{dev.name} (Flash: 0x{dev.flash_start:08X}, {flash_kb}KB)"
+                    self.pack_device_combo.addItem(label, dev.name)
+                
+                self.pack_device_combo.setEnabled(True)
+                self.pack_apply_btn.setEnabled(True)
+                
+                # Also add to target combo for connection
+                pack_targets = [dev.name.lower() for dev in self._pack_info.devices]
+                current = self.target_combo.currentText()
+                self.target_combo.clear()
+                
+                if pack_targets:
+                    self.target_combo.addItem(f"── {self._pack_info.name} ──")
+                    for t in pack_targets:
+                        self.target_combo.addItem(t)
+                    self.target_combo.addItem("── 内置目标 ──")
+                
+                self.target_combo.addItems(self._all_targets)
+                
+                # Restore selection
+                idx = self.target_combo.findText(current)
+                if idx >= 0:
+                    self.target_combo.setCurrentIndex(idx)
+                
+                self.pack_info_label.setText(
+                    f"✓ {self._pack_info.vendor}.{self._pack_info.name} v{self._pack_info.version} - "
+                    f"包含 {len(self._pack_info.devices)} 个芯片"
+                )
+            else:
+                self._pack_devices = {}
+                self.pack_device_combo.clear()
+                self.pack_device_combo.setEnabled(False)
+                self.pack_apply_btn.setEnabled(False)
+                self.pack_info_label.setText("⚠ 无法解析Pack文件或没有设备信息")
+                
+        except Exception as e:
+            LOG.exception(f"Error parsing pack file: {e}")
+            self._pack_devices = {}
+            self.pack_device_combo.clear()
+            self.pack_device_combo.setEnabled(False)
+            self.pack_apply_btn.setEnabled(False)
+            self.pack_info_label.setText(f"⚠ 解析失败: {str(e)}")
             
     def _toggle_connection(self):
         """Toggle connection state"""

@@ -13,7 +13,7 @@ from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton, ToolButton,
     LineEdit, ComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, CheckBox, ProgressBar, Slider,
-    InfoBar, InfoBarPosition, SpinBox
+    InfoBar, InfoBarPosition
 )
 
 from Core.pyocd_wrapper import ResetType
@@ -116,8 +116,9 @@ class FlashPage(QWidget):
         recent_row = QHBoxLayout()
         recent_row.addWidget(BodyLabel("最近文件:"))
         self.recent_combo = ComboBox()
-        self.recent_combo.setMinimumWidth(400)
-        self.recent_combo.currentTextChanged.connect(self._on_recent_selected)
+        self.recent_combo.setMinimumWidth(350)
+        self.recent_combo.currentIndexChanged.connect(self._on_recent_selected)
+        self._recent_files_map = {}  # index -> full path
         recent_row.addWidget(self.recent_combo)
         recent_row.addStretch()
         file_layout.addLayout(recent_row)
@@ -307,19 +308,49 @@ class FlashPage(QWidget):
         self.log_message.emit(message)
         self.operation_finished.emit(success, message)
         
-    def _on_recent_selected(self, path):
+    def _on_recent_selected(self, index):
         """Handle recent file selection"""
-        if path and os.path.exists(path):
-            self.file_edit.setText(path)
+        if index > 0 and index in self._recent_files_map:
+            path = self._recent_files_map[index]
+            if os.path.exists(path):
+                self.file_edit.setText(path)
         
+    def _shorten_path(self, path: str, max_len: int = 60) -> str:
+        """Shorten path for display, keeping filename and partial directory"""
+        if len(path) <= max_len:
+            return path
+        
+        # Get filename and directory
+        filename = os.path.basename(path)
+        dirname = os.path.dirname(path)
+        
+        # If filename alone is too long, just truncate
+        if len(filename) >= max_len - 5:
+            return "..." + filename[-(max_len - 3):]
+        
+        # Calculate remaining space for directory
+        remaining = max_len - len(filename) - 4  # 4 for ".../"
+        
+        if remaining > 0:
+            # Show last part of directory
+            return "..." + dirname[-remaining:] + "/" + filename
+        else:
+            return filename
+    
     def _load_config(self):
         # Load recent files into combo
         recent = self._config.get_recent_files()
         self.recent_combo.clear()
+        self._recent_files_map = {}
+        
         self.recent_combo.addItem("-- 选择最近文件 --")
-        for f in recent:
+        
+        for idx, f in enumerate(recent, start=1):
             if os.path.exists(f):
-                self.recent_combo.addItem(f)
+                # Show shortened path but store full path
+                display_name = self._shorten_path(f)
+                self.recent_combo.addItem(display_name)
+                self._recent_files_map[idx] = f
         
         # Set last file
         if recent and os.path.exists(recent[0]):

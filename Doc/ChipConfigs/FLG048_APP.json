@@ -1,5 +1,5 @@
 {
-  "name": "FLG048_APP_0x00004000",
+  "name": "FLG048_APP",
   "vendor": "FM",
   "chip_family": "FMLG048",
   "target": "FMLG048xx",
@@ -12,6 +12,6 @@
   "reset_type": "default",
   "pack_file": "Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack",
   "options": {},
-  "description": "",
-  "notes": ""
+  "description": "Only for App",
+  "notes": "You must flash bootloader at first"
 }
