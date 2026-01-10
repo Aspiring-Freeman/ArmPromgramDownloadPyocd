@@ -5,7 +5,7 @@
         "language": "zh_CN"
     },
     "pyocd": {
-        "default_frequency": 4000000,
+        "default_frequency": 5000000,
         "connect_mode": "under-reset",
         "last_target": "fm33lg04x",
         "last_pack": "/home/lay/Program/EmbededSoftware/ArmPromgramDownloadPyocd/Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack"
@@ -51,7 +51,7 @@
     "flash": {
         "verify": true,
         "reset_after": true,
-        "last_address": "",
-        "auto_address": true
+        "last_address": "0x00000000",
+        "auto_address": false
     }
 }

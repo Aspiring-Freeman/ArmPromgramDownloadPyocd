@@ -87,6 +87,33 @@ def check_dependencies() -> bool:
     return all_ok
 
 
+def check_virtual_env():
+    """Check if running in virtual environment and warn if not"""
+    in_venv = hasattr(sys, 'real_prefix') or \
+               (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+    
+    if not in_venv:
+        print("⚠️  Warning: Not running in a virtual environment!")
+        print("   Some USB/HID dependencies may not work correctly.")
+        print("   Recommended: Create and activate a venv first.")
+        print()
+
+
+def check_pyocd_version():
+    """Check and display vendored pyOCD version"""
+    try:
+        from version import get_pyocd_version
+        pyocd_ver = get_pyocd_version()
+        print(f"[INFO] Vendored PyOCD: {pyocd_ver}")
+        
+        # Check if version is too old or incompatible
+        if "unknown" in pyocd_ver.lower():
+            print("⚠️  Warning: Could not determine PyOCD version.")
+            print("   Some features may not work as expected.")
+    except Exception as e:
+        print(f"⚠️  Warning: Error checking PyOCD version: {e}")
+
+
 def check_pyocd_submodule() -> bool:
     """
     Check if local PyOCD submodule is properly initialized.
@@ -244,6 +271,10 @@ def get_pack_files() -> list:
 
 def main():
     """Main entry point"""
+    # Environment checks
+    check_virtual_env()
+    check_pyocd_version()
+    
     setup_high_dpi()
     
     # Create application

@@ -6,6 +6,7 @@ Provides documentation for all features and configurations
 """
 
 import logging
+import sys
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -16,6 +17,8 @@ from qfluentwidgets import (
     FluentIcon, StrongBodyLabel, SubtitleLabel, ExpandSettingCard,
     SettingCard, ScrollArea, SimpleCardWidget
 )
+
+from version import __version__, get_pyocd_version
 
 LOG = logging.getLogger(__name__)
 
@@ -276,6 +279,10 @@ class HelpPage(QWidget):
         layout.addWidget(TitleLabel("帮助文档"))
         layout.addWidget(CaptionLabel("点击卡片查看详细说明"))
         
+        # Version info card - NEW
+        version_card = self._create_version_card()
+        layout.addWidget(version_card)
+        
         # Create scroll area for documentation
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -312,6 +319,36 @@ class HelpPage(QWidget):
         
         links_layout.addStretch()
         layout.addWidget(links_card)
+    
+    def _create_version_card(self) -> CardWidget:
+        """创建版本信息卡片"""
+        card = CardWidget()
+        card_layout = QVBoxLayout(card)
+        
+        card_layout.addWidget(StrongBodyLabel("💻 版本信息"))
+        
+        # Tool version
+        tool_version_label = BodyLabel(f"ARM Flash Tool: v{__version__}")
+        card_layout.addWidget(tool_version_label)
+        
+        # PyOCD version
+        pyocd_version = get_pyocd_version()
+        pyocd_label = BodyLabel(f"Vendored PyOCD: {pyocd_version}")
+        card_layout.addWidget(pyocd_label)
+        
+        # Python version
+        python_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        python_label = CaptionLabel(f"Python: {python_ver} | Platform: {sys.platform}")
+        card_layout.addWidget(python_label)
+        
+        # Virtual environment check
+        in_venv = hasattr(sys, 'real_prefix') or \
+                  (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+        venv_status = "✅ 虚拟环境" if in_venv else "⚠️  系统全局环境"
+        venv_label = CaptionLabel(f"Environment: {venv_status}")
+        card_layout.addWidget(venv_label)
+        
+        return card
     
     def _create_doc_card(self, title: str, content: str) -> CardWidget:
         """Create a documentation card"""
