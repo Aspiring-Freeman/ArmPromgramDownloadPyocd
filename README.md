@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-orange.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)
@@ -159,7 +159,15 @@ ArmPromgramDownloadPyocd/
 2. 确认电源稳定
 3. 尝试全片擦除
 
-### 📝 许可证
+### � 文档
+
+- **[文档索引](Doc/README.md)** - 所有文档的入口
+- **[测试指南](Doc/Development/TESTING.md)** - 如何运行和编写测试
+- **[安全指南](Doc/Security/SECURITY.md)** - USB扫描保护和资源管理
+- **[变更日志](Doc/Release/CHANGELOG.md)** - 版本历史和更新
+- **[发行说明](Doc/Release/RELEASE_NOTES.md)** - 版本亮点
+
+### �📝 许可证
 
 本项目基于 MIT 许可证开源。
 
@@ -196,8 +204,10 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run tests (optional)
-pytest
+# Run tests (optional, cross-platform)
+python tests/run_quick_tests.py  # Quick tests (skips USB tests)
+# or
+pytest tests/  # Full test suite
 
 # Run application
 python main.py
@@ -205,6 +215,14 @@ python main.py
 
 > ⚠️ **Note**: This project uses a local PyOCD version from `Driver/pyOCD` for compatibility.
 > If the submodule is not initialized, it will fall back to pip-installed PyOCD.
+
+### 📚 Documentation
+
+- **[Documentation Index](Doc/README.md)** - Entry point for all docs
+- **[Testing Guide](Doc/Development/TESTING.md)** - How to run and write tests
+- **[Security Guide](Doc/Security/SECURITY.md)** - USB protection & resource management
+- **[Changelog](Doc/Release/CHANGELOG.md)** - Version history
+- **[Release Notes](Doc/Release/RELEASE_NOTES.md)** - Release highlights
 
 ### 📝 License
 

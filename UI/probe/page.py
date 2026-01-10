@@ -68,6 +68,11 @@ class ProbePage(PresetManagerMixin, QWidget):
         self._install_tooltips()  # Install instant tooltips
         self._load_targets()
         self._load_presets()
+        
+        # 执行一次初始探针扫描
+        self._scan_probes()
+        
+        # 启动自动扫描（如果启用）
         self._start_scanning()
         
     def _init_ui(self):
@@ -118,9 +123,10 @@ class ProbePage(PresetManagerMixin, QWidget):
         
         self.probe_list = ListWidget()
         self.probe_list.setMaximumHeight(120)
+        self.probe_list.hide()  # 初始隐藏，扫描后显示
         probe_layout.addWidget(self.probe_list)
         
-        self.no_probe_label = CaptionLabel("未检测到探针")
+        self.no_probe_label = CaptionLabel("未检测到探针，点击刷新按钮扫描")
         probe_layout.addWidget(self.no_probe_label)
         
         return probe_card
@@ -793,7 +799,14 @@ class ProbePage(PresetManagerMixin, QWidget):
         
     def _start_scanning(self):
         """Start background probe scanning"""
-        self._scanner = ProbeScanner(self._wrapper)
+        # Check if auto-scanning is enabled in config
+        auto_scan = self._config.get('settings.auto_scan_probes', True)
+        if not auto_scan:
+            LOG.info("自动探针扫描已禁用")
+            return
+        # 从配置获取扫描间隔，默认10秒
+        scan_interval = self._config.get('settings.probe_scan_interval', 10)
+        self._scanner = ProbeScanner(self._wrapper, scan_interval)
         self._scanner.probes_found.connect(self._update_probe_list)
         self._scanner.start()
         
@@ -865,7 +878,12 @@ class ProbePage(PresetManagerMixin, QWidget):
             self.no_probe_label.hide()
             self.probe_list.show()
             for p in probes:
-                self.probe_list.addItem(f"{p.description} [{p.unique_id[:12]}...]")
+                # 显示格式：产品名 - 厂商 [ID前12位]
+                # 让用户更容易根据名字识别探针
+                display_name = f"{p.product_name}"
+                if p.vendor_name and p.vendor_name != "Unknown":
+                    display_name = f"{p.vendor_name} {p.product_name}"
+                self.probe_list.addItem(f"{display_name} [{p.unique_id[:12]}...]")
         else:
             self.no_probe_label.show()
             self.probe_list.hide()

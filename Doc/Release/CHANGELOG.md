@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-10
+
+### Added
+- **USB Auto-Scan Control**: New configuration option to disable automatic USB probe scanning
+  - `auto_scan_probes: false` - Prevents interference with USB storage devices (e.g., USB SSDs)
+  - `probe_scan_interval: 10` - Configurable scan interval (1-60 seconds)
+  - Manual scan button for on-demand probe detection
+- **Security & Safety Tests**: Comprehensive test suite for resource safety
+  - `tests/test_probe_scanner.py` - Probe scanner safety and resource limits
+  - `tests/test_security_safety.py` - Input validation, path security, resource limits
+  - 30+ new security-focused test cases with markers: `@pytest.mark.security`, `@pytest.mark.resource`, `@pytest.mark.usb`
+- **Cross-Platform Test Runner**: New Python-based test script
+  - `tests/run_quick_tests.py` - Works on Windows/Linux/macOS
+  - Runs fast, non-USB tests automatically
+- **Documentation Reorganization**:
+  - `Doc/Development/` - Development and testing documentation
+  - `Doc/Security/` - Security guidelines and resource management
+  - `Doc/Release/` - Changelog and release notes
+  - `Doc/README.md` - Documentation index
+  - `Doc/PROJECT_ORGANIZATION.md` - Project structure guide
+
+### Changed
+- **Probe Display Format**: Improved probe identification in list
+  - Format: `Vendor ProductName [ID...]` instead of generic description
+  - Clearer device selection for users
+- **Initial Probe Scan**: Single scan on startup instead of continuous auto-scan
+  - Reduces USB device access frequency
+  - Manual refresh available via button
+- **Project Structure**: Cleaner root directory
+  - All documentation moved to `Doc/` subdirectory
+  - Removed `run.sh` (use `python main.py` directly)
+  - Only `README.md` remains in root
+
+### Fixed
+- USB auto-scanning interfering with USB storage devices
+- Probe scanner thread leaks on repeated start/stop cycles
+- Path traversal vulnerabilities in file path handling
+- Resource consumption during continuous probe scanning
+
+### Security
+- **Input Validation**: All file paths validated and normalized
+- **Resource Limits**: Memory and CPU usage bounds enforced
+- **USB Device Filtering**: Only debug probes listed, storage devices excluded
+- **Scan Timeout Protection**: All USB operations have timeout (<10s)
+- **Configuration Safety**: JSON injection and path traversal prevented
+
+### Documentation
+- **TESTING.md**: Complete testing guide with platform-specific instructions
+- **SECURITY.md**: Detailed security improvements and USB protection guide
+- **TEST_IMPROVEMENTS.md**: Test coverage summary and statistics
+
 ## [1.5.0] - 2026-01-10
 
 ### Added

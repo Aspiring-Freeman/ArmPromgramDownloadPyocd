@@ -17,23 +17,26 @@ class ProbeScanner(QThread):
     """
     probes_found = pyqtSignal(list)
     
-    def __init__(self, wrapper):
+    def __init__(self, wrapper, scan_interval=10):
         """Initialize scanner
         
         Args:
             wrapper: PyOCDWrapper instance
+            scan_interval: 扫描间隔(秒), 默认10秒
         """
         super().__init__()
         self._wrapper = wrapper
         self._running = True
+        self._scan_interval = scan_interval
         
     def run(self):
         """Main scanner loop"""
         while self._running:
             probes = self._wrapper.list_probes()
             self.probes_found.emit(probes)
-            # 2 second interval with early exit support
-            for _ in range(20):
+            # 使用配置的扫描间隔，支持早期退出
+            sleep_iterations = int(self._scan_interval * 10)
+            for _ in range(sleep_iterations):
                 if not self._running:
                     break
                 time.sleep(0.1)
