@@ -298,32 +298,30 @@ class FlashPage(QWidget):
     def _cancel_flash(self):
         """Cancel flash operation with safety handling
         
-        Note: Cancelling during flash is risky - we use cooperative cancellation
-        and only force terminate as an absolute last resort. The underlying
-        PyOCD flash operation programs in pages, so cancellation happens
-        between pages, not mid-program.
+        Note: We NEVER use terminate() as it can leave USB handles and
+        interpreter state corrupted. Instead, we rely on cooperative
+        cancellation between page boundaries and inform the user to wait.
         """
         if self._worker and self._worker.isRunning():
             self.log_message.emit("⚠️ 正在请求取消烧录操作...")
             self._worker.cancel()  # Request cooperative cancellation
             
             # Wait for cooperative cancellation (between page boundaries)
-            self._worker.wait(5000)  # Extended timeout for page completion
-            
-            if self._worker.isRunning():
-                # Log detailed warning before force terminate
-                LOG.warning("Worker did not respond to cancel request within timeout")
-                self.log_message.emit("⚠️ 烧录操作未响应，等待当前页写入完成...")
-                
-                # Give more time for current page to complete
-                self._worker.wait(3000)
-                
-                if self._worker.isRunning():
-                    # Absolute last resort - force terminate
-                    LOG.error("Force terminating flash worker - this may leave flash in inconsistent state")
-                    self.log_message.emit("❌ 强制终止烧录操作 - Flash可能处于不一致状态，建议重新烧录")
-                    self._worker.terminate()
-                    self._worker.wait()
+            self.log_message.emit("⏳ 等待当前页写入完成（最多30秒）...")
+            if not self._worker.wait(30000):  # 30s timeout
+                # Worker still running - inform user
+                LOG.error("Worker did not respond to cancel request within 30s")
+                self.log_message.emit(
+                    "⚠️ 烧录操作无法及时取消，建议：\\n"
+                    "1. 继续等待操作完成\\n"
+                    "2. 重新拔插USB探针\\n"
+                    "3. 重启应用程序\\n"
+                    "❌ 绝不建议强制关闭 - 可能损坏USB驱动状态"
+                )
+                # 启用按钮让用户可以重试
+                self.flash_btn.setEnabled(False)
+                self.cancel_btn.setEnabled(False)
+                return
             
             self._on_finished(False, "已取消")
             

@@ -119,18 +119,16 @@ def normalize_pack_path(pack_path: str) -> str:
         return pack_path
     
     # Case 3: Absolute path from another platform - extract relative part
-    # Pattern: Look for "Package/...", "Driver/..." etc. in the path
-    patterns = [
-        r'[/\\]?(Package[/\\].+)$',       # Package/...
-        r'[/\\]?(Driver[/\\].+)$',        # Driver/...
-    ]
+    # Use pathlib to find common project folders instead of regex
+    path_parts = pack_path_obj.parts
     
-    for pattern in patterns:
-        match = re.search(pattern, pack_path, re.IGNORECASE)
-        if match:
-            relative_path = match.group(1)
-            # Normalize separators for current OS
-            relative_path = relative_path.replace('\\', '/').replace('/', os.sep)
+    # Look for known project folders in the path
+    target_folders = ['Package', 'package', 'Driver', 'driver']
+    for i, part in enumerate(path_parts):
+        if part in target_folders:
+            # Found a known folder - reconstruct path from this point
+            relative_parts = path_parts[i:]
+            relative_path = os.sep.join(relative_parts)
             full_path = project_root / relative_path
             LOG.debug(f"Normalized cross-platform path: {pack_path} -> {full_path}")
             return str(full_path)

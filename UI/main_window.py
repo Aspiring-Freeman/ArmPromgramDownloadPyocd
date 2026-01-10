@@ -177,41 +177,46 @@ class MainWindow(FluentWindow):
         """Handle application close with proper resource cleanup
         
         Order of cleanup:
-        1. Stop UI workers (flash/erase workers)
-        2. Cancel connection attempts
-        3. Stop background scanning
-        4. Disconnect from hardware
-        5. Save window state
+        1. Hide window immediately (improve UX)
+        2. Stop UI workers (flash/erase workers)
+        3. Cancel connection attempts
+        4. Stop background scanning
+        5. Disconnect from hardware
+        6. Save window state
+        
+        Note: NEVER use terminate() - it corrupts USB handles
         """
+        # Hide window immediately for better UX
+        self.hide()
+        QApplication.processEvents()
+        
         LOG.info("Application closing, cleaning up resources...")
+        
+        has_running_workers = False
         
         # 1. Stop any ongoing flash/erase workers first
         if hasattr(self.flash_page, '_worker') and self.flash_page._worker:
             if self.flash_page._worker.isRunning():
-                LOG.info("Stopping flash worker...")
+                LOG.info("Requesting flash worker to stop...")
                 self.flash_page._worker.cancel()
-                self.flash_page._worker.wait(2000)
-                if self.flash_page._worker.isRunning():
-                    self.flash_page._worker.terminate()
-                    self.flash_page._worker.wait()
+                if not self.flash_page._worker.wait(3000):
+                    LOG.warning("Flash worker did not stop in time")
+                    has_running_workers = True
         
         if hasattr(self.erase_page, '_worker') and self.erase_page._worker:
             if self.erase_page._worker.isRunning():
-                LOG.info("Stopping erase worker...")
+                LOG.info("Requesting erase worker to stop...")
                 self.erase_page._worker.cancel()
-                self.erase_page._worker.wait(2000)
-                if self.erase_page._worker.isRunning():
-                    self.erase_page._worker.terminate()
-                    self.erase_page._worker.wait()
+                if not self.erase_page._worker.wait(3000):
+                    LOG.warning("Erase worker did not stop in time")
+                    has_running_workers = True
         
         # 2. Cancel any ongoing connection attempts
         if hasattr(self.probe_page, '_connect_worker') and self.probe_page._connect_worker:
             if self.probe_page._connect_worker.isRunning():
-                LOG.info("Stopping connection worker...")
-                self.probe_page._connect_worker.wait(1000)
-                if self.probe_page._connect_worker.isRunning():
-                    self.probe_page._connect_worker.terminate()
-                    self.probe_page._connect_worker.wait()
+                LOG.info("Waiting for connection worker...")
+                if not self.probe_page._connect_worker.wait(1000):
+                    LOG.warning("Connection worker still running")
         
         # 3. Stop background scanning
         try:
@@ -220,12 +225,15 @@ class MainWindow(FluentWindow):
         except Exception as e:
             LOG.warning(f"Error stopping scanner: {e}")
         
-        # 4. Force disconnect (skip lock acquisition during shutdown)
-        try:
-            LOG.info("Disconnecting from hardware...")
-            self._wrapper.disconnect(force=True)
-        except Exception as e:
-            LOG.warning(f"Error during disconnect: {e}")
+        # 4. Disconnect from hardware (skip if workers are stuck)
+        if not has_running_workers:
+            try:
+                LOG.info("Disconnecting from hardware...")
+                self._wrapper.disconnect(force=True)
+            except Exception as e:
+                LOG.warning(f"Error during disconnect: {e}")
+        else:
+            LOG.warning("Skipping disconnect due to running workers - please replug USB probe")
         
         # 5. Save page settings
         try:

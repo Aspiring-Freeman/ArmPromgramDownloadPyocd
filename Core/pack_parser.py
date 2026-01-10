@@ -7,10 +7,21 @@ Parses .pack files (ZIP archives) to extract chip information from PDSC files
 
 import logging
 import zipfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
+
+# Use defusedxml for secure XML parsing to prevent XXE attacks
+try:
+    from defusedxml import ElementTree as ET
+except ImportError:
+    # Fallback to standard library with warning
+    import xml.etree.ElementTree as ET
+    LOG_INIT = logging.getLogger(__name__)
+    LOG_INIT.warning(
+        "defusedxml not available - using standard XML parser. "
+        "Consider installing defusedxml for enhanced security: pip install defusedxml"
+    )
 
 LOG = logging.getLogger(__name__)
 

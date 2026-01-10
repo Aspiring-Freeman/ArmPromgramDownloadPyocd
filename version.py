@@ -3,8 +3,8 @@
 import sys
 from pathlib import Path
 
-__version__ = "1.7.0"
-__version_info__ = (1, 7, 0)
+__version__ = "1.8.0"
+__version_info__ = (1, 8, 0)
 __author__ = "Aspiring-Freeman"
 __email__ = ""
 __license__ = "MIT"
@@ -40,6 +40,10 @@ def get_pyocd_version() -> str:
         import subprocess
         try:
             git_dir = project_root / "Driver" / "pyOCD"
+            # 检查是否存在 .git 文件夹，避免无意义的 git 调用
+            if not (git_dir / ".git").exists():
+                return f"{version} (no git repo)"
+            
             result = subprocess.run(
                 ['git', 'log', '-1', '--format=%h %ci'],
                 cwd=str(git_dir),

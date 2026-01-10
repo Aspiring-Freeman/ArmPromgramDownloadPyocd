@@ -127,13 +127,22 @@ class ConnectionMixin:
                     if probe_id in p.unique_id:
                         selected_probe = p
                         break
-            if selected_probe:
-                command_logger.log(f"   Selected probe matching ID: {probe_id[:16]}...")
+                
+                if not selected_probe:
+                    # 严格模式：指定了probe_id但未找到，直接报错而不是自动选择
+                    command_logger.log_error("Specified probe not found",
+                        f"Could not find probe with ID: {probe_id[:16]}...\\n"
+                        f"Available probes ({len(probes)}):")
+                    for i, p in enumerate(probes, 1):
+                        command_logger.log(f"  {i}. {p.unique_id} ({p.description})")
+                    command_logger.log("\\nTip: Please select the correct probe or remove the probe_id filter.")
+                    return False
             else:
-                command_logger.log("   ⚠️ Probe ID not found, using first available")
-                    
-            if not selected_probe:
+                # 未指定probe_id，使用第一个可用探针
                 selected_probe = probes[0]
+            
+            if selected_probe:
+                command_logger.log(f"   Selected probe: {selected_probe.unique_id[:16]}...")
             
             # Log probe info
             command_logger.log("")

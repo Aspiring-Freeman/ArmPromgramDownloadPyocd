@@ -307,7 +307,8 @@ class ProbePage(PresetManagerMixin, QWidget):
         # 目标芯片变化时，如果已连接则断开
         if self._connected:
             self._disconnect()
-            self.log_message.emit("⚠️ 目标芯片已更改，已自动断开连接")
+            self.log_message.emit("⚠️ 目标芯片已更改，已自动断开连接")\n        # 参数变化时标记配置未应用，要求重新点击"应用"按钮
+        self._config_applied = False
     
     def _on_freq_changed(self, text: str):
         """Handle frequency selection change"""
@@ -317,6 +318,8 @@ class ProbePage(PresetManagerMixin, QWidget):
         if self._connected:
             self._disconnect()
             self.log_message.emit("⚠️ SWD频率已更改，已自动断开连接")
+        # 参数变化时标记配置未应用，要求重新点击"应用"按钮
+        self._config_applied = False
     
     def _on_mode_changed(self, text: str):
         """Handle connection mode change"""

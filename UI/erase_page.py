@@ -498,32 +498,30 @@ class ErasePage(QWidget):
     def _cancel_erase(self):
         """Cancel erase operation with safety handling
         
-        Note: Cancelling during erase is risky - we use cooperative cancellation
-        and only force terminate as an absolute last resort. The underlying
-        PyOCD erase operation is atomic per sector, so cancellation happens
-        between sectors, not mid-erase.
+        Note: We NEVER use terminate() as it can leave USB handles and
+        interpreter state corrupted. Instead, we rely on cooperative
+        cancellation between sector boundaries and inform the user to wait.
         """
         if self._worker and self._worker.isRunning():
             self.log_message.emit("⚠️ 正在请求取消擦除操作...")
             self._worker.cancel()  # Request cooperative cancellation
             
             # Wait for cooperative cancellation (between sector boundaries)
-            self._worker.wait(5000)  # Extended timeout for sector completion
-            
-            if self._worker.isRunning():
-                # Log detailed warning before force terminate
-                LOG.warning("Worker did not respond to cancel request within timeout")
-                self.log_message.emit("⚠️ 擦除操作未响应，等待当前扇区完成...")
-                
-                # Give more time for current sector to complete
-                self._worker.wait(3000)
-                
-                if self._worker.isRunning():
-                    # Absolute last resort - force terminate
-                    LOG.error("Force terminating erase worker - this may leave flash in inconsistent state")
-                    self.log_message.emit("❌ 强制终止擦除操作 - Flash可能处于不一致状态，建议重新擦除")
-                    self._worker.terminate()
-                    self._worker.wait()
+            self.log_message.emit("⏳ 等待当前扇区擦除完成（最多30秒）...")
+            if not self._worker.wait(30000):  # 30s timeout
+                # Worker still running - inform user
+                LOG.error("Worker did not respond to cancel request within 30s")
+                self.log_message.emit(
+                    "⚠️ 擦除操作无法及时取消，建议：\\n"
+                    "1. 继续等待操作完成\\n"
+                    "2. 重新拔插USB探针\\n"
+                    "3. 重启应用程序\\n"
+                    "❌ 绝不建议强制关闭 - 可能损坏USB驱动状态"
+                )
+                # 启用按钮让用户可以重试
+                self.erase_btn.setEnabled(False)
+                self.cancel_btn.setEnabled(False)
+                return
             
             self._on_finished(False, "已取消")
             
