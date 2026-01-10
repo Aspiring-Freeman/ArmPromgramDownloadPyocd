@@ -849,8 +849,8 @@ class ProbePage(PresetManagerMixin, QWidget):
                 frequency = int(float(freq_text.replace('mhz', '').strip()) * 1000000)
             elif 'khz' in freq_text:
                 frequency = int(float(freq_text.replace('khz', '').strip()) * 1000)
-        except:
-            pass
+        except (ValueError, AttributeError) as e:
+            LOG.debug(f"频率解析失败，使用默认值: {e}")
         
         # Open dialog
         dialog = ChipDetectDialog(
