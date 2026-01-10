@@ -7,6 +7,31 @@ Centralized definitions to avoid duplication across modules
 
 from typing import Optional, Dict, Tuple, List
 from dataclasses import dataclass
+from pathlib import Path
+
+# =============================================================================
+# Project Root Directory (统一定义，避免多处重复)
+# =============================================================================
+
+def get_project_root() -> Path:
+    """Get project root directory
+    
+    Returns the absolute path to project root by locating main.py.
+    This is the single source of truth for PROJECT_ROOT.
+    
+    Returns:
+        Path: Absolute path to project root directory
+    """
+    # Navigate up from Core/utils.py to project root
+    current = Path(__file__).parent.parent  # Core/ -> project root
+    if (current / "main.py").exists():
+        return current
+    # Fallback to current working directory
+    return Path.cwd()
+
+
+# Cache the project root for performance
+PROJECT_ROOT = get_project_root()
 
 # =============================================================================
 # SWD Frequency Constants

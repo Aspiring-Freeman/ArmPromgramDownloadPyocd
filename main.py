@@ -19,8 +19,8 @@ from typing import Tuple, Optional
 
 from version import __version__, __author__
 
-# Project root directory
-PROJECT_ROOT = Path(__file__).parent.absolute()
+# Import project root from centralized location
+from Core.utils import PROJECT_ROOT
 
 # Local PyOCD path
 LOCAL_PYOCD_PATH = PROJECT_ROOT / "Driver" / "pyOCD"

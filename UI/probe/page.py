@@ -54,6 +54,7 @@ class ProbePage(PresetManagerMixin, QWidget):
         self._scanner: Optional[ProbeScanner] = None
         self._connect_worker: Optional[ConnectWorker] = None
         self._all_targets: List[str] = []
+        self._base_targets: List[str] = []  # 保存内置目标列表，不会被Pack覆盖
         
         # Chip config manager
         self._chip_config_mgr = ChipConfigManager()
@@ -307,7 +308,8 @@ class ProbePage(PresetManagerMixin, QWidget):
         # 目标芯片变化时，如果已连接则断开
         if self._connected:
             self._disconnect()
-            self.log_message.emit("⚠️ 目标芯片已更改，已自动断开连接")\n        # 参数变化时标记配置未应用，要求重新点击"应用"按钮
+            self.log_message.emit("⚠️ 目标芯片已更改，已自动断开连接")
+        # 参数变化时标记配置未应用，要求重新点击"应用"按钮
         self._config_applied = False
     
     def _on_freq_changed(self, text: str):
@@ -612,6 +614,9 @@ class ProbePage(PresetManagerMixin, QWidget):
                     
                 # Add pack targets to target list if not present
                 if self._pack_info and self._pack_info.devices:
+                    # 从基础列表重建目标列表，清理旧Pack的目标
+                    self._all_targets = self._base_targets.copy()
+                    
                     for dev in self._pack_info.devices:
                         dev_name = dev.name.lower()
                         if dev_name not in self._all_targets:
@@ -894,6 +899,7 @@ class ProbePage(PresetManagerMixin, QWidget):
     def _load_targets(self):
         """Load available targets"""
         self._all_targets = self._wrapper.list_targets()
+        self._base_targets = self._all_targets.copy()  # 保存基础列表
         self._update_target_combo(self._all_targets)
         
         # Load last used settings

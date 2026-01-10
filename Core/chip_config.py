@@ -18,11 +18,9 @@ LOG = logging.getLogger(__name__)
 
 
 def get_project_root() -> Path:
-    """Get project root directory"""
-    current = Path(__file__).parent.parent
-    if (current / "main.py").exists():
-        return current
-    return Path.cwd()
+    """Get project root directory - imported from utils for consistency"""
+    from Core.utils import PROJECT_ROOT
+    return PROJECT_ROOT
 
 
 # Default paths relative to project root

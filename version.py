@@ -3,8 +3,8 @@
 import sys
 from pathlib import Path
 
-__version__ = "1.8.0"
-__version_info__ = (1, 8, 0)
+__version__ = "1.8.1"
+__version_info__ = (1, 8, 1)
 __author__ = "Aspiring-Freeman"
 __email__ = ""
 __license__ = "MIT"
@@ -21,15 +21,17 @@ def get_pyocd_version() -> str:
         or "unknown" if not available
     """
     try:
+        # Import project root from centralized location
+        from Core.utils import PROJECT_ROOT
+        
         # Try to get pyOCD module path
-        project_root = Path(__file__).parent
-        pyocd_path = project_root / "Driver" / "pyOCD" / "pyocd"
+        pyocd_path = PROJECT_ROOT / "Driver" / "pyOCD" / "pyocd"
         
         if not pyocd_path.exists():
             return "not installed (submodule missing)"
         
         # Try to import pyOCD and get version
-        sys.path.insert(0, str(project_root / "Driver" / "pyOCD"))
+        sys.path.insert(0, str(PROJECT_ROOT / "Driver" / "pyOCD"))
         try:
             import pyocd
             version = getattr(pyocd, '__version__', 'unknown')
@@ -39,7 +41,7 @@ def get_pyocd_version() -> str:
         # Try to get git commit info
         import subprocess
         try:
-            git_dir = project_root / "Driver" / "pyOCD"
+            git_dir = PROJECT_ROOT / "Driver" / "pyOCD"
             # 检查是否存在 .git 文件夹，避免无意义的 git 调用
             if not (git_dir / ".git").exists():
                 return f"{version} (no git repo)"

@@ -117,9 +117,20 @@ class ConfigManager:
             self._config = self.DEFAULT_CONFIG.copy()
             
     def _save(self):
+        """Save configuration with atomic operation to prevent corruption
+        
+        Uses temporary file + rename pattern to ensure config integrity
+        even if program crashes during write.
+        """
         try:
-            with open(self._path, 'w', encoding='utf-8') as f:
+            # Write to temporary file first
+            temp_path = self._path.with_suffix('.tmp')
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=4, ensure_ascii=False)
+            
+            # Atomic replace: only overwrites config.json if temp write succeeded
+            import os
+            os.replace(temp_path, self._path)
         except Exception as e:
             LOG.error(f"Config save error: {e}")
     
