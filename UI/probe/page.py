@@ -6,7 +6,7 @@ Probe management and connection page
 """
 
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QListWidgetItem, QFileDialog
@@ -26,6 +26,7 @@ from Core.pack_parser import PackParser, PackInfo
 from UI.probe.scanner import ProbeScanner
 from UI.probe.worker import ConnectWorker
 from UI.probe.preset_manager import PresetManagerMixin
+from UI.tooltip_helper import install_tooltip
 
 LOG = logging.getLogger(__name__)
 
@@ -58,8 +59,13 @@ class ProbePage(PresetManagerMixin, QWidget):
         self._chip_config_mgr = ChipConfigManager()
         self._current_chip_config: Optional[ChipConfig] = None
         self._pack_info: Optional[PackInfo] = None  # Cached pack info
+        self._loaded_pack_path: Optional[str] = None  # Track which pack file is loaded
+        self._preset_name_to_key: Dict[str, str] = {}  # Map preset name to key
+        self._pack_device_label_to_name: Dict[str, str] = {}  # Map pack device label to name
+        self._config_applied = False  # 配置是否已应用的标志
         
         self._init_ui()
+        self._install_tooltips()  # Install instant tooltips
         self._load_targets()
         self._load_presets()
         self._start_scanning()
@@ -204,7 +210,8 @@ class ProbePage(PresetManagerMixin, QWidget):
         pack_row1.addWidget(BodyLabel("Pack文件:"))
         self.pack_edit = LineEdit()
         self.pack_edit.setPlaceholderText("选择 CMSIS-Pack 文件 (.pack)")
-        pack_row1.addWidget(self.pack_edit)
+        self.pack_edit.setReadOnly(True)  # 只读，防止手动编辑
+        pack_row1.addWidget(self.pack_edit, 1)  # stretch=1, 让它占用剩余空间
         self.pack_btn = PushButton("浏览", icon=FluentIcon.FOLDER)
         self.pack_btn.clicked.connect(self._browse_pack)
         pack_row1.addWidget(self.pack_btn)
@@ -216,6 +223,7 @@ class ProbePage(PresetManagerMixin, QWidget):
         self.pack_device_combo.setMinimumWidth(250)
         self.pack_device_combo.setPlaceholderText("先浏览Pack文件...")
         self.pack_device_combo.setEnabled(False)
+        self.pack_device_combo.currentTextChanged.connect(self._on_pack_device_changed)
         pack_row2.addWidget(self.pack_device_combo)
         self.pack_apply_btn = PushButton("应用", icon=FluentIcon.ACCEPT)
         self.pack_apply_btn.clicked.connect(self._apply_pack_config)
@@ -252,8 +260,206 @@ class ProbePage(PresetManagerMixin, QWidget):
         
         return preset_card
     
+    def _load_presets(self):
+        """Load vendors and presets into combo boxes"""
+        # Get all presets
+        presets = self._chip_config_mgr.get_all_presets()
+        
+        # Collect vendors (use set to avoid duplicates)
+        vendors = set()
+        for key, config in presets.items():
+            if config.vendor:
+                vendors.add(config.vendor)
+        
+        # Update vendor combo
+        self.vendor_combo.blockSignals(True)
+        self.vendor_combo.clear()
+        self.vendor_combo.addItem("全部")  # "All" option
+        for vendor in sorted(vendors):
+            self.vendor_combo.addItem(vendor)
+        self.vendor_combo.blockSignals(False)
+        
+        # Load presets for current vendor
+        self._update_preset_combo()
+    
+    def _on_vendor_changed(self, vendor: str):
+        """Handle vendor selection change"""
+        # 厂商变化时，总是清除应用标志
+        self._config_applied = False
+        
+        # 如果之前已连接，自动断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 厂商已更改，已自动断开连接")
+        
+        self._update_preset_combo()
+    
+    def _on_target_changed(self, text: str):
+        """Handle target chip selection change"""
+        if not text:
+            return
+        # 目标芯片变化时，如果已连接则断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 目标芯片已更改，已自动断开连接")
+    
+    def _on_freq_changed(self, text: str):
+        """Handle frequency selection change"""
+        if not text:
+            return
+        # 频率变化时，如果已连接则断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ SWD频率已更改，已自动断开连接")
+    
+    def _on_mode_changed(self, text: str):
+        """Handle connection mode change"""
+        if not text:
+            return
+        # 连接模式变化时，如果已连接则断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 连接模式已更改，已自动断开连接")
+    
+    def _on_pack_device_changed(self, text: str):
+        """Handle pack device selection change"""
+        LOG.debug(f"Pack device changed: '{text}', currentIndex={self.pack_device_combo.currentIndex()}")
+        
+        if not text:
+            return
+        
+        # Pack设备变化时，总是清除应用标志
+        self._config_applied = False
+        self.log_message.emit("⚠️ Pack芯片已更改，需要重新应用配置")
+        
+        # 如果之前已连接，自动断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 已自动断开连接")
+        
+        # 更新状态提示
+        self.preset_info.setText("👁 预览中 - 请点击「应用」按钮确认配置")
+    
+    def _update_preset_combo(self):
+        """Update preset combo based on selected vendor"""
+        vendor = self.vendor_combo.currentText()
+        presets = self._chip_config_mgr.get_all_presets()
+        
+        self.preset_combo.blockSignals(True)
+        self.preset_combo.clear()
+        self._preset_name_to_key.clear()  # Clear mapping
+        
+        for key, config in presets.items():
+            # Filter by vendor if not "全部" (All)
+            if vendor == "全部" or config.vendor == vendor:
+                self.preset_combo.addItem(config.name)
+                self._preset_name_to_key[config.name] = key  # Store mapping
+        
+        self.preset_combo.blockSignals(False)
+        
+        # Trigger preset info update
+        if self.preset_combo.count() > 0:
+            self._on_preset_changed(self.preset_combo.currentText())
+        else:
+            self.preset_info.setText("📋 没有找到匹配的预设")
+    
+    def _on_preset_changed(self, text: str):
+        """Handle preset selection change"""
+        LOG.debug(f"Preset changed: '{text}', connected={self._connected}")
+        
+        # 只要预设选择发生变化，就应该：
+        # 1. 清除已应用标志（需要重新应用）
+        # 2. 如果已连接，断开连接
+        
+        # 先处理断开连接和清除标志的逻辑（在检查预设有效性之前）
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 预设已更改，已自动断开连接")
+        
+        # 清除已应用标志
+        self._config_applied = False
+        
+        # 然后处理预设预览信息
+        name = self.preset_combo.currentText()
+        if name:
+            key = self._preset_name_to_key.get(name)
+            if key:
+                config = self._chip_config_mgr.get_preset(key)
+                if config:
+                    info = f"目标: {config.target} | Flash: 0x{config.flash_start:08X}"
+                    if config.pack_file:
+                        info += f" | Pack: {config.pack_file.split('/')[-1]}"
+                    # 明确显示这是预览，需要点击应用
+                    self.preset_info.setText(f"👁 预览: {info} (点击'应用'生效)")
+                    return
+        
+        # 如果没有有效的预设，显示提示
+        self.preset_info.setText("👁 请选择预设并点击'应用'按钮")
+    
+    def _apply_preset(self):
+        """Apply selected preset"""
+        name = self.preset_combo.currentText()
+        if not name:
+            InfoBar.warning("提示", "请先选择预设", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
+            return
+        
+        key = self._preset_name_to_key.get(name)
+        if not key:
+            InfoBar.warning("提示", f"无效的预设: {name}", parent=self.window(),
+                          position=InfoBarPosition.TOP_RIGHT)
+            return
+        
+        config = self._chip_config_mgr.get_preset(key)
+        if config:
+            self._current_chip_config = config
+            self._apply_config_to_ui(config)
+            self.config_applied.emit(config)
+            # 设置已应用标志
+            self._config_applied = True
+            # 更新状态显示为"已应用"
+            info = f"目标: {config.target} | Flash: 0x{config.flash_start:08X}"
+            self.preset_info.setText(f"✅ 已应用: {config.name} | {info}")
+            InfoBar.success("成功", f"已应用预设: {config.name}", parent=self.window(),
+                           position=InfoBarPosition.TOP_RIGHT)
+        else:
+            InfoBar.error("失败", "预设加载失败", parent=self.window(),
+                         position=InfoBarPosition.TOP_RIGHT)
+    
+    def _delete_preset(self):
+        """Delete selected preset"""
+        name = self.preset_combo.currentText()
+        if not name:
+            return
+        
+        key = self._preset_name_to_key.get(name)
+        if not key:
+            return
+        
+        config = self._chip_config_mgr.get_preset(key)
+        preset_name = config.name if config else name
+        
+        # Confirm deletion
+        box = MessageBox("确认删除", f"确定要删除预设 '{name}' 吗？", self.window())
+        if box.exec():
+            if self._chip_config_mgr.delete_user_preset(key):
+                self._load_presets()
+                InfoBar.success("成功", f"已删除预设: {name}", parent=self.window(),
+                               position=InfoBarPosition.TOP_RIGHT)
+            else:
+                InfoBar.error("失败", "删除预设失败", parent=self.window(),
+                             position=InfoBarPosition.TOP_RIGHT)
+
     def _on_source_changed(self, checked: bool):
         """Handle configuration source change"""
+        # 切换配置源时，总是清除应用标志
+        self._config_applied = False
+        
+        # 如果之前已连接，自动断开
+        if self._connected:
+            self._disconnect()
+            self.log_message.emit("⚠️ 配置源已更改，已自动断开连接")
+        
         # Hide all
         self.file_widget.hide()
         self.preset_widget.hide()
@@ -275,7 +481,18 @@ class ProbePage(PresetManagerMixin, QWidget):
         path, _ = QFileDialog.getOpenFileName(
             self, "选择配置文件", "", "JSON Files (*.json)")
         if path:
+            old_path = self.file_path_edit.text()
             self.file_path_edit.setText(path)
+            
+            # 如果文件路径发生变化，清除应用标志并断开连接
+            if old_path != path:
+                LOG.debug(f"Config file changed: '{old_path}' -> '{path}'")
+                self._config_applied = False
+                self.preset_info.setText(f"👁 预览: {path.split('/')[-1]} (点击'应用'生效)")
+                
+                if self._connected:
+                    self._disconnect()
+                    self.log_message.emit("⚠️ 配置文件已更改，已自动断开连接")
     
     def _apply_file_config(self):
         """Apply configuration from file"""
@@ -294,6 +511,10 @@ class ProbePage(PresetManagerMixin, QWidget):
                 self._current_chip_config = config
                 self._apply_config_to_ui(config)
                 self.config_applied.emit(config)
+                # 设置已应用标志
+                self._config_applied = True
+                info = f"目标: {config.target} | Flash: 0x{config.flash_start:08X}"
+                self.preset_info.setText(f"✅ 已应用: {config.name} | {info}")
                 InfoBar.success("成功", f"已应用配置: {config.name}", parent=self.window(),
                                position=InfoBarPosition.TOP_RIGHT)
         else:
@@ -305,15 +526,17 @@ class ProbePage(PresetManagerMixin, QWidget):
         if not self._pack_info:
             return
         
-        idx = self.pack_device_combo.currentIndex()
-        if idx < 0:
+        label = self.pack_device_combo.currentText()
+        if not label:
             InfoBar.warning("提示", "请先选择芯片", parent=self.window(),
                           position=InfoBarPosition.TOP_RIGHT)
             return
         
-        dev_name = self.pack_device_combo.itemData(idx)
+        # 使用字典获取设备名
+        dev_name = self._pack_device_label_to_name.get(label)
         if not dev_name:
-            dev_name = self.pack_device_combo.currentText().split(" (")[0]
+            # 备用方案：从标签解析
+            dev_name = label.split(" (")[0]
         
         device = self._pack_info.get_device(dev_name)
         if not device:
@@ -337,26 +560,95 @@ class ProbePage(PresetManagerMixin, QWidget):
         )
         
         self._current_chip_config = config
-        self._apply_config_to_ui(config)
+        self._apply_config_to_ui(config, skip_pack_parse=True)  # 不重新解析Pack，保持当前选择
         self.config_applied.emit(config)
+        
+        # 设置已应用标志
+        self._config_applied = True
         
         flash_kb = device.flash_size // 1024 if device.flash_size else 0
         self.preset_info.setText(
-            f"✓ 已应用: {device.name} | Flash: 0x{device.flash_start:08X} ({flash_kb}KB) | "
+            f"✅ 已应用: {device.name} | Flash: 0x{device.flash_start:08X} ({flash_kb}KB) | "
             f"⚠ 如需调整Flash地址，请到烧录页面修改"
         )
         InfoBar.success("成功", f"已应用: {device.name}", parent=self.window(),
                        position=InfoBarPosition.TOP_RIGHT)
     
-    def _apply_config_to_ui(self, config: ChipConfig):
-        """Apply config to UI elements (target, freq, mode)"""
-        # Find and set target
+    def _apply_config_to_ui(self, config: ChipConfig, skip_pack_parse: bool = False):
+        """Apply config to UI elements (target, freq, mode, pack)
+        
+        Args:
+            config: The chip configuration to apply
+            skip_pack_parse: If True, skip re-parsing pack file (used when applying from pack selection)
+        """
+        self.log_message.emit(f"[DEBUG] 应用配置: target={config.target}, pack={config.pack_file}, skip_pack_parse={skip_pack_parse}")
+        
+        # 只有在需要时才解析 Pack 文件：
+        # 1. 配置包含 pack_file
+        # 2. 不是从 Pack 导入模式应用的 (skip_pack_parse=False)
+        # 3. Pack 文件存在
+        if config.pack_file and not skip_pack_parse:
+            from pathlib import Path
+            pack_path = Path(config.pack_file)
+            self.log_message.emit(f"[DEBUG] Pack路径: {pack_path}, 存在: {pack_path.exists()}")
+            if pack_path.exists():
+                # 只更新 pack_edit 显示，不改变 pack_device_combo 的选择
+                self.pack_edit.setText(config.pack_file)
+                
+                # 只有当 pack 信息未加载或路径不同时才重新解析
+                current_pack = getattr(self, '_loaded_pack_path', None)
+                if current_pack != config.pack_file:
+                    self._parse_pack_file(str(pack_path))
+                    self._loaded_pack_path = config.pack_file
+                    
+                # Add pack targets to target list if not present
+                if self._pack_info and self._pack_info.devices:
+                    for dev in self._pack_info.devices:
+                        dev_name = dev.name.lower()
+                        if dev_name not in self._all_targets:
+                            self._all_targets.append(dev_name)
+                            self.log_message.emit(f"[DEBUG] 添加Pack目标: {dev_name}")
+                    self._update_target_combo(self._all_targets)
+        
+        # Find and set target - try exact match first
+        self.log_message.emit(f"[DEBUG] 目标列表数量: {self.target_combo.count()}")
         target_idx = self.target_combo.findText(config.target)
+        self.log_message.emit(f"[DEBUG] 精确匹配: target={config.target}, idx={target_idx}")
+        target_found = False
         if target_idx >= 0:
             self.target_combo.setCurrentIndex(target_idx)
+            self.log_message.emit(f"[DEBUG] 已选中目标 (精确): {config.target}")
+            target_found = True
         else:
-            # Filter and find
-            self.target_search.setText(config.target)
+            # Try case-insensitive search in all targets
+            target_lower = config.target.lower()
+            for i in range(self.target_combo.count()):
+                item_text = self.target_combo.itemText(i)
+                if item_text.lower() == target_lower:
+                    self.target_combo.setCurrentIndex(i)
+                    target_found = True
+                    self.log_message.emit(f"[DEBUG] 已选中目标 (不区分大小写): {item_text}")
+                    break
+            
+            if not target_found:
+                self.log_message.emit(f"[DEBUG] 未找到目标 {config.target}，尝试过滤")
+                # Filter and select first match
+                self.target_search.setText(config.target)
+                # After filtering, select the first item if available
+                if self.target_combo.count() > 0:
+                    self.target_combo.setCurrentIndex(0)
+                    self.log_message.emit(f"[DEBUG] 过滤后选中第一个: {self.target_combo.currentText()}")
+                    target_found = True
+                else:
+                    self.log_message.emit(f"⚠️ 目标芯片 '{config.target}' 未在列表中找到，请手动选择或加载对应的 Pack 文件")
+                    # Show warning to user
+                    InfoBar.warning(
+                        "目标未找到", 
+                        f"芯片 '{config.target}' 不在当前目标列表中，请确保已加载对应的 Pack 文件",
+                        parent=self.window(),
+                        duration=5000,
+                        position=InfoBarPosition.TOP_RIGHT
+                    )
         
         # Set frequency
         freq = config.default_frequency
@@ -386,6 +678,7 @@ class ProbePage(PresetManagerMixin, QWidget):
         target_row.addWidget(self.target_search)
         self.target_combo = ComboBox()
         self.target_combo.setMinimumWidth(250)
+        self.target_combo.currentTextChanged.connect(self._on_target_changed)
         target_row.addWidget(self.target_combo)
         target_row.addStretch()
         opt_layout.addLayout(target_row)
@@ -397,11 +690,13 @@ class ProbePage(PresetManagerMixin, QWidget):
         self.freq_combo.addItems(["100 kHz", "500 kHz", "1 MHz", "2 MHz", "4 MHz", "8 MHz", "10 MHz"])
         self.freq_combo.setText("1 MHz")
         self.freq_combo.setPlaceholderText("输入或选择频率")
+        self.freq_combo.currentTextChanged.connect(self._on_freq_changed)
         opt_row.addWidget(self.freq_combo)
         
         opt_row.addWidget(BodyLabel("连接模式:"))
         self.mode_combo = ComboBox()
         self.mode_combo.addItems(["Under Reset", "Halt", "Pre-Reset", "Attach"])
+        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
         opt_row.addWidget(self.mode_combo)
         opt_row.addStretch()
         opt_layout.addLayout(opt_row)
@@ -440,10 +735,10 @@ class ProbePage(PresetManagerMixin, QWidget):
         
         reset_header = QHBoxLayout()
         reset_header.addWidget(StrongBodyLabel("复位控制"))
-        reset_help_btn = ToolButton(FluentIcon.QUESTION)
-        reset_help_btn.setToolTip("点击查看复位类型说明")
-        reset_help_btn.clicked.connect(self._show_reset_help)
-        reset_header.addWidget(reset_help_btn)
+        self.reset_help_btn = ToolButton(FluentIcon.QUESTION)
+        self.reset_help_btn.setToolTip("点击查看复位类型说明")
+        self.reset_help_btn.clicked.connect(self._show_reset_help)
+        reset_header.addWidget(self.reset_help_btn)
         reset_header.addStretch()
         reset_layout.addLayout(reset_header)
         
@@ -476,6 +771,25 @@ class ProbePage(PresetManagerMixin, QWidget):
         reset_layout.addWidget(reset_desc)
         
         return reset_card
+    
+    def _install_tooltips(self):
+        """Install instant tooltip filters on widgets with tooltips"""
+        tooltip_widgets = [
+            self.detect_chip_btn,
+            self.delete_preset_btn,
+            self.export_preset_btn,
+            self.save_preset_btn,
+            self.reset_combo,
+            self.halt_check,
+        ]
+        
+        # Also check if reset_help_btn exists
+        if hasattr(self, 'reset_help_btn'):
+            tooltip_widgets.append(self.reset_help_btn)
+        
+        for widget in tooltip_widgets:
+            if widget is not None:
+                install_tooltip(widget)
         
     def _start_scanning(self):
         """Start background probe scanning"""
@@ -625,11 +939,15 @@ class ProbePage(PresetManagerMixin, QWidget):
                 self._pack_devices = {dev.name.lower(): dev for dev in self._pack_info.devices}
                 
                 # Populate pack device combo
+                self.pack_device_combo.blockSignals(True)  # 阻止信号防止触发变化
                 self.pack_device_combo.clear()
+                self._pack_device_label_to_name.clear()  # 清除映射
                 for dev in self._pack_info.devices:
                     flash_kb = dev.flash_size // 1024 if dev.flash_size else 0
                     label = f"{dev.name} (Flash: 0x{dev.flash_start:08X}, {flash_kb}KB)"
-                    self.pack_device_combo.addItem(label, dev.name)
+                    self.pack_device_combo.addItem(label)
+                    self._pack_device_label_to_name[label] = dev.name  # 存储映射
+                self.pack_device_combo.blockSignals(False)
                 
                 self.pack_device_combo.setEnabled(True)
                 self.pack_apply_btn.setEnabled(True)
@@ -656,8 +974,11 @@ class ProbePage(PresetManagerMixin, QWidget):
                     f"✓ {self._pack_info.vendor}.{self._pack_info.name} v{self._pack_info.version} - "
                     f"包含 {len(self._pack_info.devices)} 个芯片"
                 )
+                # 记录已加载的 Pack 路径
+                self._loaded_pack_path = pack_path
             else:
                 self._pack_devices = {}
+                self._loaded_pack_path = None
                 self.pack_device_combo.clear()
                 self.pack_device_combo.setEnabled(False)
                 self.pack_apply_btn.setEnabled(False)
@@ -666,6 +987,7 @@ class ProbePage(PresetManagerMixin, QWidget):
         except Exception as e:
             LOG.exception(f"Error parsing pack file: {e}")
             self._pack_devices = {}
+            self._loaded_pack_path = None
             self.pack_device_combo.clear()
             self.pack_device_combo.setEnabled(False)
             self.pack_apply_btn.setEnabled(False)
@@ -680,9 +1002,30 @@ class ProbePage(PresetManagerMixin, QWidget):
             
     def _connect(self):
         """Start connection process"""
+        # 检查是否已应用配置
+        LOG.debug(f"_connect called: _config_applied={self._config_applied}")
+        
+        if not self._config_applied:
+            self.log_message.emit("⚠️ 请先应用芯片配置")
+            InfoBar.warning(
+                "未应用配置", 
+                "请先点击'应用'按钮应用芯片配置后再连接",
+                parent=self.window(),
+                duration=4000,
+                position=InfoBarPosition.TOP_RIGHT
+            )
+            return
+        
         target = self.target_combo.currentText()
         if not target:
-            self.log_message.emit("请选择目标芯片")
+            self.log_message.emit("⚠️ 请选择目标芯片")
+            InfoBar.warning(
+                "未选择目标", 
+                "请先选择或应用芯片配置，然后选择目标芯片",
+                parent=self.window(),
+                duration=4000,
+                position=InfoBarPosition.TOP_RIGHT
+            )
             return
             
         # Get selected probe

@@ -12,7 +12,7 @@ from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton,
     LineEdit, ComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, RadioButton, ProgressBar,
-    InfoBar, InfoBarPosition, SpinBox
+    InfoBar, InfoBarPosition, SpinBox, MessageBox
 )
 
 from Core.pyocd_wrapper import ResetType
@@ -241,7 +241,7 @@ class ErasePage(QWidget):
         btn_row.addWidget(self.erase_btn)
         
         self.cancel_btn = PushButton("取消", icon=FluentIcon.CANCEL)
-        self.cancel_btn.clicked.connect(self._cancel_erase)
+        self.cancel_btn.clicked.connect(self._confirm_cancel_erase)
         self.cancel_btn.setEnabled(False)
         btn_row.addWidget(self.cancel_btn)
         
@@ -476,16 +476,55 @@ class ErasePage(QWidget):
         
         self.log_message.emit(f"开始擦除 ({mode})")
         self.operation_started.emit()
+    
+    def _confirm_cancel_erase(self):
+        """Show confirmation dialog before cancelling erase"""
+        if not self._worker or not self._worker.isRunning():
+            return
+            
+        msg = MessageBox(
+            "⚠️ 确认取消擦除",
+            "擦除过程中取消可能导致Flash处于不一致状态。\n"
+            "建议等待当前操作完成，或取消后重新进行全片擦除。\n\n"
+            "确定要取消吗？",
+            self.window()
+        )
+        msg.yesButton.setText("取消擦除")
+        msg.cancelButton.setText("继续等待")
+        
+        if msg.exec():
+            self._cancel_erase()
         
     def _cancel_erase(self):
+        """Cancel erase operation with safety handling
+        
+        Note: Cancelling during erase is risky - we use cooperative cancellation
+        and only force terminate as an absolute last resort. The underlying
+        PyOCD erase operation is atomic per sector, so cancellation happens
+        between sectors, not mid-erase.
+        """
         if self._worker and self._worker.isRunning():
+            self.log_message.emit("⚠️ 正在请求取消擦除操作...")
             self._worker.cancel()  # Request cooperative cancellation
-            self._worker.wait(3000)  # Wait up to 3 seconds
+            
+            # Wait for cooperative cancellation (between sector boundaries)
+            self._worker.wait(5000)  # Extended timeout for sector completion
+            
             if self._worker.isRunning():
-                # Only terminate as last resort
-                LOG.warning("Worker did not respond to cancel, forcing termination")
-                self._worker.terminate()
-                self._worker.wait()
+                # Log detailed warning before force terminate
+                LOG.warning("Worker did not respond to cancel request within timeout")
+                self.log_message.emit("⚠️ 擦除操作未响应，等待当前扇区完成...")
+                
+                # Give more time for current sector to complete
+                self._worker.wait(3000)
+                
+                if self._worker.isRunning():
+                    # Absolute last resort - force terminate
+                    LOG.error("Force terminating erase worker - this may leave flash in inconsistent state")
+                    self.log_message.emit("❌ 强制终止擦除操作 - Flash可能处于不一致状态，建议重新擦除")
+                    self._worker.terminate()
+                    self._worker.wait()
+            
             self._on_finished(False, "已取消")
             
     def _on_progress(self, value):

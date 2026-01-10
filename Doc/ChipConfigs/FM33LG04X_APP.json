@@ -1,7 +1,7 @@
 {
-  "name": "FLG048_APP",
+  "name": "FM33LG04X APP",
   "vendor": "FM",
-  "chip_family": "FMLG048",
+  "chip_family": "fm33lg04",
   "target": "fm33lg04x",
   "flash_start": 16384,
   "flash_size": 0,
@@ -13,5 +13,5 @@
   "pack_file": "Package/Vendor/FM/FMSH.FM33LG0XX_DFP.3.0.1.pack",
   "options": {},
   "description": "Only for App",
-  "notes": "You must flash bootloader at first"
+  "notes": ""
 }

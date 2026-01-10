@@ -21,7 +21,7 @@ from qfluentwidgets import (
     LineEdit, ComboBox, EditableComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, CheckBox, SpinBox,
     InfoBar, InfoBarPosition, SearchLineEdit, TableWidget,
-    Dialog, MessageBox
+    Dialog, MessageBox, isDarkTheme
 )
 
 from Core.chip_config import ChipConfigManager, ChipConfig, BUILTIN_PRESETS, get_default_flash_start
@@ -42,10 +42,28 @@ class EditPresetDialog(QDialog):
         title = "新建芯片预设" if self._is_new else f"编辑预设: {config.name}"
         self.setWindowTitle(title)
         
+        # Apply theme-aware styling
+        self._apply_theme_style()
+        
         self._init_content()
         
         if config:
             self._load_config(config)
+    
+    def _apply_theme_style(self):
+        """Apply theme-aware styling to the dialog"""
+        if isDarkTheme():
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #2d2d2d;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #f9f9f9;
+                }
+            """)
     
     def _init_content(self):
         """Initialize dialog content"""

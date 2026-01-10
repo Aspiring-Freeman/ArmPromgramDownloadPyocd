@@ -13,7 +13,7 @@ from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton, ToolButton,
     LineEdit, ComboBox, TitleLabel, BodyLabel, CaptionLabel,
     FluentIcon, StrongBodyLabel, CheckBox, ProgressBar, Slider,
-    InfoBar, InfoBarPosition
+    InfoBar, InfoBarPosition, MessageBox
 )
 
 from Core.pyocd_wrapper import ResetType
@@ -208,7 +208,7 @@ class FlashPage(QWidget):
         btn_row.addWidget(self.flash_btn)
         
         self.cancel_btn = PushButton("取消", icon=FluentIcon.CANCEL)
-        self.cancel_btn.clicked.connect(self._cancel_flash)
+        self.cancel_btn.clicked.connect(self._confirm_cancel_flash)
         self.cancel_btn.setEnabled(False)
         btn_row.addWidget(self.cancel_btn)
         
@@ -276,16 +276,55 @@ class FlashPage(QWidget):
         self._config.add_recent_file(file_path)
         self.log_message.emit(f"开始烧录: {file_path}")
         self.operation_started.emit()
+    
+    def _confirm_cancel_flash(self):
+        """Show confirmation dialog before cancelling flash"""
+        if not self._worker or not self._worker.isRunning():
+            return
+            
+        msg = MessageBox(
+            "⚠️ 确认取消烧录",
+            "烧录过程中取消可能导致固件不完整。\n"
+            "建议等待当前操作完成，或取消后重新进行烧录。\n\n"
+            "确定要取消吗？",
+            self.window()
+        )
+        msg.yesButton.setText("取消烧录")
+        msg.cancelButton.setText("继续等待")
+        
+        if msg.exec():
+            self._cancel_flash()
         
     def _cancel_flash(self):
+        """Cancel flash operation with safety handling
+        
+        Note: Cancelling during flash is risky - we use cooperative cancellation
+        and only force terminate as an absolute last resort. The underlying
+        PyOCD flash operation programs in pages, so cancellation happens
+        between pages, not mid-program.
+        """
         if self._worker and self._worker.isRunning():
+            self.log_message.emit("⚠️ 正在请求取消烧录操作...")
             self._worker.cancel()  # Request cooperative cancellation
-            self._worker.wait(3000)  # Wait up to 3 seconds
+            
+            # Wait for cooperative cancellation (between page boundaries)
+            self._worker.wait(5000)  # Extended timeout for page completion
+            
             if self._worker.isRunning():
-                # Only terminate as last resort
-                LOG.warning("Worker did not respond to cancel, forcing termination")
-                self._worker.terminate()
-                self._worker.wait()
+                # Log detailed warning before force terminate
+                LOG.warning("Worker did not respond to cancel request within timeout")
+                self.log_message.emit("⚠️ 烧录操作未响应，等待当前页写入完成...")
+                
+                # Give more time for current page to complete
+                self._worker.wait(3000)
+                
+                if self._worker.isRunning():
+                    # Absolute last resort - force terminate
+                    LOG.error("Force terminating flash worker - this may leave flash in inconsistent state")
+                    self.log_message.emit("❌ 强制终止烧录操作 - Flash可能处于不一致状态，建议重新烧录")
+                    self._worker.terminate()
+                    self._worker.wait()
+            
             self._on_finished(False, "已取消")
             
     def _on_progress(self, value):
@@ -360,14 +399,98 @@ class FlashPage(QWidget):
         self.verify_check.setChecked(self._config.get_flash_verify())
         self.reset_check.setChecked(self._config.get_flash_reset())
         
+        # Load last address settings
+        last_address = self._config.get_flash_address()
+        auto_address = self._config.get_flash_auto_address()
+        
+        self.addr_auto.setChecked(auto_address)
+        self.addr_edit.setEnabled(not auto_address)
+        
+        if last_address and not auto_address:
+            self.addr_edit.setText(last_address)
+        
     def _save_config(self):
         """Save current settings"""
         self._config.set_flash_verify(self.verify_check.isChecked())
         self._config.set_flash_reset(self.reset_check.isChecked())
+        
+        # Save address settings
+        self._config.set_flash_address(self.addr_edit.text().strip())
+        self._config.set_flash_auto_address(self.addr_auto.isChecked())
     
     def apply_chip_config(self, chip_config: ChipConfig):
-        """Apply chip configuration - set flash address"""
-        if chip_config and chip_config.flash_start is not None:
+        """Apply chip configuration - set flash address and validate
+        
+        This method is called when a chip config is applied from:
+        - Preset selection
+        - File import
+        - Pack import
+        """
+        if not chip_config:
+            return
+            
+        messages = []
+        
+        # 1. Set flash address if available
+        if chip_config.flash_start is not None:
             self.addr_edit.setText(f"0x{chip_config.flash_start:08X}")
             self.addr_auto.setChecked(False)
-            self.log_message.emit(f"已设置起始地址: 0x{chip_config.flash_start:08X} ({chip_config.name})")
+            messages.append(f"起始地址: 0x{chip_config.flash_start:08X}")
+            
+            # 2. Validate address - warn if unusual
+            # Common ARM flash start addresses: 0x08000000 (STM32), 0x00000000 (some chips), 
+            # 0x10000000, 0x60000000, etc.
+            addr = chip_config.flash_start
+            if addr == 0:
+                # Address 0 is valid for some chips (e.g., FM33LG04X, Nordic, etc.)
+                # but can also indicate a misconfiguration, show info
+                InfoBar.info(
+                    "提示", 
+                    "Flash地址为 0x00000000，请确认是否正确\n"
+                    "如需修改，请取消勾选「自动检测」并手动输入地址",
+                    parent=self.window(),
+                    position=InfoBarPosition.TOP_RIGHT,
+                    duration=5000
+                )
+            elif addr > 0x80000000:
+                # Address in upper memory range, might be RAM or peripheral
+                InfoBar.warning(
+                    "警告",
+                    f"Flash地址 0x{addr:08X} 位于高地址区域\n"
+                    "请确认这不是RAM或外设地址",
+                    parent=self.window(),
+                    position=InfoBarPosition.TOP_RIGHT,
+                    duration=5000
+                )
+        
+        # 3. Check pack file requirement
+        if chip_config.pack_file:
+            from Core.chip_config import normalize_pack_path
+            import os
+            
+            pack_path = normalize_pack_path(chip_config.pack_file)
+            if os.path.exists(pack_path):
+                pack_basename = os.path.basename(pack_path)
+                messages.append(f"Pack文件: {pack_basename}")
+                InfoBar.info(
+                    "Pack 配置",
+                    f"此芯片配置需要 Pack 文件:\n{pack_basename}\n"
+                    "请确保在「探针连接」页面已加载相应的 Pack",
+                    parent=self.window(),
+                    position=InfoBarPosition.TOP_RIGHT,
+                    duration=6000
+                )
+            else:
+                messages.append(f"⚠ Pack文件未找到: {chip_config.pack_file}")
+                InfoBar.warning(
+                    "Pack 文件缺失",
+                    f"配置指定的 Pack 文件未找到:\n{chip_config.pack_file}\n"
+                    "可能导致芯片识别失败",
+                    parent=self.window(),
+                    position=InfoBarPosition.TOP_RIGHT,
+                    duration=6000
+                )
+        
+        # Log summary
+        if messages:
+            self.log_message.emit(f"已应用配置 [{chip_config.name}]: " + " | ".join(messages))

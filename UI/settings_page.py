@@ -21,6 +21,7 @@ from Core.chip_config import (
     get_project_root, to_relative_path, to_absolute_path,
     DEFAULT_PYOCD_PATH, DEFAULT_PACK_DIRECTORY
 )
+from UI.tooltip_helper import install_tooltip
 
 try:
     from qfluentwidgets import setTheme, Theme, setThemeColor
@@ -268,6 +269,19 @@ class SettingsPage(QWidget):
         
         scroll.setWidget(content)
         main_layout.addWidget(scroll)
+        
+        # Install instant tooltips for widgets
+        self._install_tooltips()
+        
+    def _install_tooltips(self):
+        """Install instant tooltip filters on widgets with tooltips"""
+        tooltip_widgets = [
+            self.freq_combo,
+            self.pyocd_path_edit,
+            self.pack_dir_edit,
+        ]
+        for widget in tooltip_widgets:
+            install_tooltip(widget)
         
     def _browse_pack_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择 CMSIS-Pack 目录")

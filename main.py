@@ -17,6 +17,8 @@ import logging
 from pathlib import Path
 from typing import Tuple, Optional
 
+from version import __version__, __author__
+
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
@@ -247,7 +249,7 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("ARM Flash Programming Tool")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion(__version__)
     
     # Set default font
     font = QFont()

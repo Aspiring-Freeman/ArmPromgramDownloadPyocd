@@ -2,7 +2,7 @@
   "name": "FLG048_APP_0x00004000",
   "vendor": "FM",
   "chip_family": "FMLG048",
-  "target": "FMLG048xx",
+  "target": "fm33lg04x",
   "flash_start": 16384,
   "flash_size": 0,
   "ram_start": 536870912,

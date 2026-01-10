@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-10
+
+### Added
+- **Tooltip Helper Module**: New `UI/tooltip_helper.py` for theme-aware tooltips
+  - Automatically adapts tooltip colors to light/dark theme
+  - Centralized tooltip styling across all UI pages
+- **UI Theme Tests**: Comprehensive theme compatibility tests
+  - `tests/test_ui_theme.py` - 30+ test cases for theme handling
+  - Validates transparent backgrounds, dialog styling, tooltip usage
+- **Integration Tests**: New `tests/test_integration.py` for project structure validation
+- **Logger Tests**: New `tests/test_logger.py` for logging module tests
+
+### Changed
+- **Auto-disconnect on Config Change**: Any configuration change while connected now auto-disconnects
+  - File import: Disconnect when browsing/changing config file
+  - Preset selection: Disconnect when preset changes
+  - Pack import: Disconnect when device selection changes
+  - Connection options: Disconnect when target/frequency/mode changes
+  - Clear visual feedback with warning messages
+- **Improved Theme Handling**: All UI pages now use TooltipHelper for consistent styling
+- **Settings Page**: Better theme initialization and label visibility in dark mode
+- **Chip Config Page**: Improved theme compatibility
+
+### Fixed
+- Config changes while connected not triggering disconnect
+- Preset changes not requiring re-apply before reconnection
+- Theme styling issues in dialogs and tooltips
+- Label visibility in dark mode across multiple pages
+
 ## [1.4.0] - 2026-01-10
 
 ### Added

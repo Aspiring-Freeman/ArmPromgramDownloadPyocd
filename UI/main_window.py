@@ -174,25 +174,68 @@ class MainWindow(FluentWindow):
                     self.probe_page.connect_status.setText("连接已断开")
             
     def closeEvent(self, event):
+        """Handle application close with proper resource cleanup
+        
+        Order of cleanup:
+        1. Stop UI workers (flash/erase workers)
+        2. Cancel connection attempts
+        3. Stop background scanning
+        4. Disconnect from hardware
+        5. Save window state
+        """
+        LOG.info("Application closing, cleaning up resources...")
+        
+        # 1. Stop any ongoing flash/erase workers first
+        if hasattr(self.flash_page, '_worker') and self.flash_page._worker:
+            if self.flash_page._worker.isRunning():
+                LOG.info("Stopping flash worker...")
+                self.flash_page._worker.cancel()
+                self.flash_page._worker.wait(2000)
+                if self.flash_page._worker.isRunning():
+                    self.flash_page._worker.terminate()
+                    self.flash_page._worker.wait()
+        
+        if hasattr(self.erase_page, '_worker') and self.erase_page._worker:
+            if self.erase_page._worker.isRunning():
+                LOG.info("Stopping erase worker...")
+                self.erase_page._worker.cancel()
+                self.erase_page._worker.wait(2000)
+                if self.erase_page._worker.isRunning():
+                    self.erase_page._worker.terminate()
+                    self.erase_page._worker.wait()
+        
+        # 2. Cancel any ongoing connection attempts
+        if hasattr(self.probe_page, '_connect_worker') and self.probe_page._connect_worker:
+            if self.probe_page._connect_worker.isRunning():
+                LOG.info("Stopping connection worker...")
+                self.probe_page._connect_worker.wait(1000)
+                if self.probe_page._connect_worker.isRunning():
+                    self.probe_page._connect_worker.terminate()
+                    self.probe_page._connect_worker.wait()
+        
+        # 3. Stop background scanning
+        try:
+            LOG.info("Stopping probe scanner...")
+            self.probe_page.stop_scanning()
+        except Exception as e:
+            LOG.warning(f"Error stopping scanner: {e}")
+        
+        # 4. Force disconnect (skip lock acquisition during shutdown)
+        try:
+            LOG.info("Disconnecting from hardware...")
+            self._wrapper.disconnect(force=True)
+        except Exception as e:
+            LOG.warning(f"Error during disconnect: {e}")
+        
+        # 5. Save page settings
+        try:
+            if hasattr(self.flash_page, '_save_config'):
+                self.flash_page._save_config()
+        except Exception as e:
+            LOG.warning(f"Error saving flash page config: {e}")
+        
+        # 6. Save geometry
         self._save_geometry()
         
-        # Cancel any ongoing connection first
-        if hasattr(self.probe_page, '_cancel_connect'):
-            try:
-                self.probe_page._cancel_connect()
-            except Exception:
-                pass
-        
-        # Stop background scanning
-        try:
-            self.probe_page.stop_scanning()
-        except Exception:
-            pass
-        
-        # Force disconnect (skip lock acquisition during shutdown)
-        try:
-            self._wrapper.disconnect(force=True)
-        except Exception:
-            pass
-            
+        LOG.info("Cleanup complete, exiting")
         event.accept()

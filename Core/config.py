@@ -234,6 +234,22 @@ class ConfigManager:
     
     def set_flash_reset(self, reset: bool):
         self.set('flash.reset_after', reset)
+    
+    def get_flash_address(self) -> str:
+        """Get last used flash address"""
+        return self.get('flash.last_address', '')
+    
+    def set_flash_address(self, address: str):
+        """Save last used flash address"""
+        self.set('flash.last_address', address)
+    
+    def get_flash_auto_address(self) -> bool:
+        """Get auto address detection setting"""
+        return self.get('flash.auto_address', True)
+    
+    def set_flash_auto_address(self, auto: bool):
+        """Save auto address detection setting"""
+        self.set('flash.auto_address', auto)
 
 
 # Global singleton instance - lazy initialization
