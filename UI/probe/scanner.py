@@ -32,8 +32,12 @@ class ProbeScanner(QThread):
     def run(self):
         """Main scanner loop"""
         while self._running:
-            probes = self._wrapper.list_probes()
-            self.probes_found.emit(probes)
+            try:
+                probes = self._wrapper.list_probes()
+                self.probes_found.emit(probes)
+            except Exception:
+                # 忽略列举探针时的错误，继续扫描
+                self.probes_found.emit([])
             # 使用配置的扫描间隔，支持早期退出
             sleep_iterations = int(self._scan_interval * 10)
             for _ in range(sleep_iterations):

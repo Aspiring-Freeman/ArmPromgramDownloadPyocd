@@ -87,7 +87,7 @@ class TestProbeScannerSafety:
         assert (stop_time - start_time) < 2, "Scanner should stop quickly"
         assert not scanner.isRunning(), "Scanner thread should be stopped"
     
-    def test_scanner_emits_probe_list(self):
+    def test_scanner_emits_probe_list(self, qtbot):
         """Test that scanner emits probe list signal"""
         from UI.probe.scanner import ProbeScanner
         from Core.pyocd.base import ProbeInfo
@@ -101,16 +101,14 @@ class TestProbeScannerSafety:
         
         scanner = ProbeScanner(mock_wrapper, scan_interval=1)
         
-        # Collect emitted signals
-        emitted_probes = []
-        scanner.probes_found.connect(lambda p: emitted_probes.append(p))
+        # Use qtbot to wait for signal
+        with qtbot.waitSignal(scanner.probes_found, timeout=3000) as blocker:
+            scanner.start()
         
-        scanner.start()
-        time.sleep(0.5)  # Wait for first scan
         scanner.stop()
         
-        assert len(emitted_probes) > 0, "Should emit probe list at least once"
-        assert emitted_probes[0] == test_probes, "Should emit correct probe list"
+        assert blocker.args is not None, "Should emit probe list"
+        assert blocker.args[0] == test_probes, "Should emit correct probe list"
 
 
 @pytest.mark.resource

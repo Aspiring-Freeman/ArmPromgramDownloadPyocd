@@ -13,8 +13,8 @@
     "ui": {
         "theme": "dark",
         "accent_color": "#0078D4",
-        "window_width": 1920,
-        "window_height": 1048,
+        "window_width": 1536,
+        "window_height": 816,
         "window_x": 0,
         "window_y": 0
     },

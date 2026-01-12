@@ -9,7 +9,7 @@ import logging
 from typing import Optional, List, Dict
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QListWidgetItem, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QListWidgetItem, QFileDialog, QScrollArea
 
 from qfluentwidgets import (
     CardWidget, PushButton, PrimaryPushButton, ToolButton,
@@ -78,9 +78,24 @@ class ProbePage(PresetManagerMixin, QWidget):
         
     def _init_ui(self):
         """Initialize the UI components"""
-        layout = QVBoxLayout(self)
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        
+        # 滚动内容容器
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("QWidget { background: transparent; }")
+        layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(36, 20, 36, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(20)
         
         layout.addWidget(TitleLabel("探针与连接"))
         
@@ -101,6 +116,10 @@ class ProbePage(PresetManagerMixin, QWidget):
         layout.addWidget(reset_card)
         
         layout.addStretch()
+        
+        # 设置滚动区域
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
     
     def _create_probe_card(self) -> CardWidget:
         """Create the probe detection card"""
