@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-01-22
+
+### Fixed
+
+#### User Experience Improvements
+- **Frequency Setting Preserved on Re-apply** - Fixed frequency resetting to preset default when clicking "Apply" again
+  - Issue: User changes frequency to 8 MHz, clicks "Apply" → resets to preset's 5 MHz
+  - Solution: Added `preserve_frequency` parameter to `_apply_config_to_ui()`
+  - Impact: Re-applying same preset/config now preserves user's manual frequency changes
+  - Files: `UI/probe/page.py`
+
+- **Flash Progress Bar Now Works** - Fixed progress bar not updating during flash operations
+  - Issue: Progress callback not passed to PyOCD's `FileProgrammer`
+  - Solution: Pass progress callback wrapper to `FileProgrammer(progress=...)`
+  - Impact: Progress bar now shows real-time flashing progress (0-100%)
+  - File: `Core/pyocd/flash.py`
+
+### Added
+
+#### Debugging Improvements
+- **Connection Frequency Debug Log** - Added debug log showing actual frequency used during connection
+  - Format: `[DEBUG] 连接频率: 8 mhz -> 8000000 Hz (8.00 MHz)`
+  - Impact: Easier to verify frequency settings are applied correctly
+  - File: `UI/probe/page.py`
+
+### Technical Details
+- Fixed 2 user-reported bugs
+- Improved flash operation feedback
+- Enhanced debugging capabilities
+- Files changed: 2 files (`UI/probe/page.py`, `Core/pyocd/flash.py`)
+
+---
+
 ## [1.8.1] - 2026-01-10
 
 ### Fixed

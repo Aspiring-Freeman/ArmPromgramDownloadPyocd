@@ -160,15 +160,20 @@ class FlashMixin:
             command_logger.log(f"")
             command_logger.log(f"⚡ Programming target...")
             command_logger.log(f"   Verify: {verify}")
+            
+            # 创建进度回调包装器，将 PyOCD 的进度值转换为 0.0-1.0
+            def pyocd_progress(value):
+                """PyOCD progress callback wrapper"""
+                if progress_callback:
+                    # PyOCD 返回 0.0-1.0 的进度值
+                    progress_callback(value)
                 
             programmer = FileProgrammer(
                 self._session,
+                progress=pyocd_progress if progress_callback else None,
                 chip_erase='sector',
                 trust_crc=not verify
             )
-            
-            if progress_callback:
-                progress_callback(0.1)
             
             # FileProgrammer auto-detects file format:
             # - .hex: Intel HEX format (address embedded)

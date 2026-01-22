@@ -442,8 +442,13 @@ class ProbePage(PresetManagerMixin, QWidget):
         
         config = self._chip_config_mgr.get_preset(key)
         if config:
+            # 如果是重新应用同一个预设，保留用户设置的频率
+            # 判断条件：当前配置存在且名称相同
+            preserve_freq = (self._current_chip_config is not None and 
+                           self._current_chip_config.name == config.name)
+            
             self._current_chip_config = config
-            self._apply_config_to_ui(config)
+            self._apply_config_to_ui(config, preserve_frequency=preserve_freq)
             self.config_applied.emit(config)
             # 设置已应用标志
             self._config_applied = True
@@ -538,8 +543,12 @@ class ProbePage(PresetManagerMixin, QWidget):
             self._load_presets()
             config = self._chip_config_mgr.get_preset(result)
             if config:
+                # 如果是重新应用同一个配置文件，保留用户设置的频率
+                preserve_freq = (self._current_chip_config is not None and 
+                               self._current_chip_config.name == config.name)
+                
                 self._current_chip_config = config
-                self._apply_config_to_ui(config)
+                self._apply_config_to_ui(config, preserve_frequency=preserve_freq)
                 self.config_applied.emit(config)
                 # 设置已应用标志
                 self._config_applied = True
@@ -589,8 +598,12 @@ class ProbePage(PresetManagerMixin, QWidget):
             pack_file=self.pack_edit.text(),
         )
         
+        # 如果是重新应用同一个Pack设备，保留用户设置的频率
+        preserve_freq = (self._current_chip_config is not None and 
+                        self._current_chip_config.name == config.name)
+        
         self._current_chip_config = config
-        self._apply_config_to_ui(config, skip_pack_parse=True)  # 不重新解析Pack，保持当前选择
+        self._apply_config_to_ui(config, skip_pack_parse=True, preserve_frequency=preserve_freq)  # 不重新解析Pack，保持当前选择
         self.config_applied.emit(config)
         
         # 设置已应用标志
@@ -604,14 +617,15 @@ class ProbePage(PresetManagerMixin, QWidget):
         InfoBar.success("成功", f"已应用: {device.name}", parent=self.window(),
                        position=InfoBarPosition.TOP_RIGHT)
     
-    def _apply_config_to_ui(self, config: ChipConfig, skip_pack_parse: bool = False):
+    def _apply_config_to_ui(self, config: ChipConfig, skip_pack_parse: bool = False, preserve_frequency: bool = False):
         """Apply config to UI elements (target, freq, mode, pack)
         
         Args:
             config: The chip configuration to apply
             skip_pack_parse: If True, skip re-parsing pack file (used when applying from pack selection)
+            preserve_frequency: If True, keep the current frequency setting instead of overwriting from config
         """
-        self.log_message.emit(f"[DEBUG] 应用配置: target={config.target}, pack={config.pack_file}, skip_pack_parse={skip_pack_parse}")
+        self.log_message.emit(f"[DEBUG] 应用配置: target={config.target}, pack={config.pack_file}, skip_pack_parse={skip_pack_parse}, preserve_frequency={preserve_frequency}")
         
         # 只有在需要时才解析 Pack 文件：
         # 1. 配置包含 pack_file
@@ -683,12 +697,13 @@ class ProbePage(PresetManagerMixin, QWidget):
                         position=InfoBarPosition.TOP_RIGHT
                     )
         
-        # Set frequency
-        freq = config.default_frequency
-        if freq >= 1000000:
-            self.freq_combo.setText(f"{freq // 1000000} MHz")
-        else:
-            self.freq_combo.setText(f"{freq // 1000} kHz")
+        # Set frequency (unless preserve_frequency is True)
+        if not preserve_frequency:
+            freq = config.default_frequency
+            if freq >= 1000000:
+                self.freq_combo.setText(f"{freq // 1000000} MHz")
+            else:
+                self.freq_combo.setText(f"{freq // 1000} kHz")
         
         # Set connect mode
         mode_map = {"under-reset": 0, "halt": 1, "pre-reset": 2, "attach": 3}
@@ -1097,6 +1112,8 @@ class ProbePage(PresetManagerMixin, QWidget):
                 freq = int(freq_text)
         except (ValueError, AttributeError):
             freq = 1000000
+        
+        self.log_message.emit(f"[DEBUG] 连接频率: {freq_text} -> {freq} Hz ({freq/1000000:.2f} MHz)")
         
         mode_map = {0: ConnectMode.UNDER_RESET, 1: ConnectMode.HALT, 2: ConnectMode.PRE_RESET, 3: ConnectMode.ATTACH}
         mode = mode_map.get(self.mode_combo.currentIndex(), ConnectMode.UNDER_RESET)
