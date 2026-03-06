@@ -3,8 +3,8 @@
 import sys
 from pathlib import Path
 
-__version__ = "1.8.3"
-__version_info__ = (1, 8, 3)
+__version__ = "1.8.4"
+__version_info__ = (1, 8, 4)
 __author__ = "Aspiring-Freeman"
 __email__ = ""
 __license__ = "MIT"

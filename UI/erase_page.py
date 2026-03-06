@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """Erase page"""
 
-import logging
-from typing import Optional
+from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal, QThread
+import logging
+
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 
 from qfluentwidgets import (
@@ -16,74 +17,10 @@ from qfluentwidgets import (
 )
 
 from Core.pyocd_wrapper import ResetType
+from Core.flash_info import resolve_flash_info
+from UI.workers import EraseWorker
 
 LOG = logging.getLogger(__name__)
-
-
-class EraseWorker(QThread):
-    """Background erase worker with cooperative cancellation"""
-    progress = pyqtSignal(float)
-    status = pyqtSignal(str)
-    finished = pyqtSignal(bool, str)
-    
-    def __init__(self, wrapper, mode, start_addr=None, end_addr=None, sector=None, reset_after=False):
-        super().__init__()
-        self._wrapper = wrapper
-        self._mode = mode
-        self._start_addr = start_addr
-        self._end_addr = end_addr
-        self._sector = sector
-        self._reset_after = reset_after
-        self._cancelled = False
-        
-    def cancel(self):
-        """Request cancellation - cooperative, not forced"""
-        self._cancelled = True
-        
-    def is_cancelled(self) -> bool:
-        return self._cancelled
-        
-    def run(self):
-        try:
-            if self._cancelled:
-                self.finished.emit(False, "已取消")
-                return
-                
-            def on_progress(p):
-                if self._cancelled:
-                    return False  # Signal to stop
-                self.progress.emit(p)
-                return True
-                
-            if self._mode == "chip":
-                self.status.emit("正在全片擦除...")
-                success = self._wrapper.mass_erase(progress_callback=on_progress)
-            elif self._mode == "sector" and self._sector is not None:
-                self.status.emit(f"正在擦除扇区 {self._sector}...")
-                success = self._wrapper.erase_sector(self._sector, progress_callback=on_progress)
-            elif self._mode == "range" and self._start_addr is not None:
-                self.status.emit(f"正在擦除地址范围 0x{self._start_addr:08X}...")
-                success = self._wrapper.erase_range(self._start_addr, self._end_addr, progress_callback=on_progress)
-            else:
-                self.finished.emit(False, "无效的擦除参数")
-                return
-            
-            if self._cancelled:
-                self.finished.emit(False, "已取消")
-                return
-                
-            if success and self._reset_after:
-                self.status.emit("擦除完成，正在复位...")
-                self._wrapper.reset(ResetType.DEFAULT, halt=False)
-                
-            if success:
-                self.finished.emit(True, "擦除成功")
-            else:
-                self.finished.emit(False, "擦除失败")
-                
-        except Exception as e:
-            LOG.exception("Erase error")
-            self.finished.emit(False, str(e))
 
 
 class ErasePage(QWidget):
@@ -97,7 +34,7 @@ class ErasePage(QWidget):
         super().__init__(parent)
         self._wrapper = wrapper
         self._config = config
-        self._worker: Optional[EraseWorker] = None
+        self._worker: EraseWorker | None = None
         self._connected = False
         
         # Current chip configuration
@@ -315,94 +252,31 @@ class ErasePage(QWidget):
         """Apply chip configuration to update address range.
         
         Called when chip configuration changes (from ProbePage or ChipConfigPage).
+        Uses the resolve_flash_info pure function for parameter resolution.
         
         Args:
             chip_config: ChipConfig dataclass with flash_start, flash_size, etc.
         """
-        # Get values from config first
-        flash_start = getattr(chip_config, 'flash_start', 0x08000000)
-        flash_size = getattr(chip_config, 'flash_size', 0)
-        sector_size = 0x800  # Default 2KB
-        target_name = getattr(chip_config, 'target', 'Unknown')
-        pack_device_name = None  # Actual device name from pack
+        # Use pure function to resolve flash parameters
+        info = resolve_flash_info(chip_config)
         
-        # Try to get more info from pack
-        if hasattr(chip_config, 'pack_file') and chip_config.pack_file:
-            try:
-                from Core.pack_parser import PackParser
-                from Core.chip_config import normalize_pack_path
-                pack_path = normalize_pack_path(chip_config.pack_file)
-                parser = PackParser(pack_path)
-                pack_info = parser.parse()
-                if pack_info and pack_info.devices:
-                    # First try to find matching device by target name
-                    device = pack_info.get_device(target_name)
-                    
-                    # If not found, try to match by chip_family
-                    if device is None:
-                        chip_family = getattr(chip_config, 'chip_family', '')
-                        if chip_family:
-                            device = pack_info.get_device(chip_family)
-                    
-                    # If still not found, use first device from pack
-                    if device is None and pack_info.devices:
-                        device = pack_info.devices[0]
-                        LOG.info(f"Using first pack device: {device.name}")
-                    
-                    if device:
-                        pack_device_name = device.name
-                        # Only override flash_size if config has 0
-                        if flash_size == 0:
-                            flash_size = device.flash_size
-                        # Only override flash_start if config has default STM32 value
-                        # and pack has different value (likely correct for this chip)
-                        if flash_start == 0x08000000 and device.flash_start != 0x08000000:
-                            flash_start = device.flash_start
-                        # Get sector size from algorithms if available
-                        # FM33 series typically has 512B or 2KB sectors
-                        if 'fm33' in device.name.lower():
-                            sector_size = 0x200  # 512B for FM33
-            except Exception as e:
-                LOG.warning(f"Failed to get flash info from pack: {e}")
-        
-        # Use reasonable defaults if still 0
-        if flash_size == 0:
-            # Try to estimate from target name
-            if '01' in target_name:
-                flash_size = 64 * 1024   # 64KB
-            elif '02' in target_name:
-                flash_size = 128 * 1024  # 128KB
-            elif '04' in target_name:
-                flash_size = 256 * 1024  # 256KB
-            else:
-                flash_size = 128 * 1024  # Default 128KB
-        
-        # Estimate sector size based on flash size if not set from pack
-        if sector_size == 0x800:  # Still default
-            if flash_size <= 64 * 1024:  # <= 64KB
-                sector_size = 0x400  # 1KB
-            elif flash_size <= 256 * 1024:  # <= 256KB
-                sector_size = 0x800  # 2KB
-            elif flash_size <= 1024 * 1024:  # <= 1MB
-                sector_size = 0x1000  # 4KB
-            else:
-                sector_size = 0x4000  # 16KB
-        
-        self._flash_start = flash_start
-        self._flash_size = flash_size
-        self._sector_size = sector_size
-        self._target_name = target_name
-        self._pack_device = pack_device_name
+        self._flash_start = info.flash_start
+        self._flash_size = info.flash_size
+        self._sector_size = info.sector_size
+        self._target_name = info.target_name
+        self._pack_device = info.pack_device
         
         # Update UI
-        flash_end = flash_start + flash_size - 1
-        self.start_edit.setText(f"0x{flash_start:08X}")
+        flash_end = info.flash_start + info.flash_size - 1
+        self.start_edit.setText(f"0x{info.flash_start:08X}")
         self.end_edit.setText(f"0x{flash_end:08X}")
         
         # Update all info displays
         self._update_chip_info_display()
         
-        LOG.info(f"Erase page config applied: {target_name} Flash 0x{flash_start:08X} ({flash_size // 1024}KB, sector {sector_size}B)")
+        LOG.info(f"Erase page config applied: {info.target_name} Flash "
+                 f"0x{info.flash_start:08X} ({info.flash_size // 1024}KB, "
+                 f"sector {info.sector_size}B)")
         
     def _start_erase(self):
         if self.chip_radio.isChecked():

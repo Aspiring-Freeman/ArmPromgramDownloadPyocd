@@ -5,12 +5,13 @@ Chip Configuration Manager
 Manages chip presets for different vendors and chip families
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict, field
 from enum import Enum
 

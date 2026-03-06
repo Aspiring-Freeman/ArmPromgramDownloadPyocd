@@ -1,0 +1,140 @@
+[build-system]
+requires = ["setuptools>=65.0", "setuptools-scm>=7.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arm-flash-tool"
+version = "1.8.4"
+description = "ARM MCU flash programming tool based on PyOCD with GUI support"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Aspiring-Freeman"}
+]
+requires-python = ">=3.9"
+keywords = ["arm", "flash", "pyocd", "embedded", "programming", "mcu"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+dependencies = [
+    # PyOCD dependencies
+    "pyusb>=1.0.0,<2.0.0",
+    "pyserial>=3.0,<4.0",
+    "cmsis-pack-manager>=0.5.0,<1.0.0",
+    "pyelftools>=0.27,<1.0",
+    "capstone>=4.0,<6.0",
+    "natsort>=8.0.0,<9.0.0",
+    "prettytable>=2.1,<4.0",
+    "pyyaml>=6.0,<7.0",
+    "lxml>=4.9.0,<6.0",
+    "six>=1.15.0,<2.0",
+    "intelhex>=2.3.0,<3.0",
+    "intervaltree>=3.0.0,<4.0",
+    "libusb-package>=1.0.0,<2.0",
+    "typing_extensions>=4.0.0,<5.0",
+    "importlib_metadata>=4.0.0,<8.0",
+    "colorama>=0.4.0,<1.0",
+    "lark>=1.0.0,<2.0",
+    "pylink-square>=1.0.0,<2.0",
+    # Qt GUI Framework
+    "PyQt6>=6.5.0,<7.0",
+    "PyQt6-Qt6>=6.5.0,<7.0",
+    "PyQt6-sip>=13.5.0,<14.0",
+    "PyQt6-Fluent-Widgets>=1.4.0,<2.0",
+    # Utilities
+    "darkdetect>=0.8.0,<1.0",
+    "defusedxml>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<9.0",
+    "pytest-cov>=4.0.0,<6.0",
+    "pytest-qt>=4.2.0,<5.0",
+    "pytest-mock>=3.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "psutil>=5.0.0",
+]
+build = [
+    "pyinstaller>=5.0,<7.0",
+]
+
+[project.scripts]
+arm-flash-tool = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/Aspiring-Freeman/ArmProgramDownloadPyocd"
+Repository = "https://github.com/Aspiring-Freeman/ArmProgramDownloadPyocd"
+Documentation = "https://github.com/Aspiring-Freeman/ArmProgramDownloadPyocd/blob/main/README.md"
+Changelog = "https://github.com/Aspiring-Freeman/ArmProgramDownloadPyocd/blob/main/Doc/Release/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["Core", "Core.pyocd", "UI", "UI.probe", "UI.workers"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "usb: marks tests that require USB hardware",
+    "hardware: marks tests that require physical hardware",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [
+    "Driver/",
+    "venv/",
+    "__pycache__/",
+]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+exclude = [
+    "Driver/",
+    "venv/",
+    "__pycache__/",
+    ".git/",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long, handled by formatter
+    "B008",   # do not perform function calls in argument defaults
+    "B905",   # zip strict
+]

@@ -155,9 +155,8 @@ class EraseMixin:
                 command_logger.log("   2. Ensure target board has stable power")
                 command_logger.log("   3. Try using a powered USB hub")
                 command_logger.log("   4. Reconnect and try again")
-                # Mark session as disconnected
-                self._session = None
-                self._current_target = None
+                # Properly close session to clean up resources
+                self._force_close_session()
             elif "timeout" in error_msg.lower():
                 command_logger.log("🔧 Troubleshooting timeout during erase:")
                 command_logger.log("   1. Target may need more time for erase")

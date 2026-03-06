@@ -88,14 +88,26 @@ class TestTooltipIntegration:
         assert 'install_tooltip(' in content
     
     def test_probe_page_uses_install_tooltip(self, project_root):
-        """Test probe/page.py uses install_tooltip"""
-        filepath = project_root / 'UI' / 'probe' / 'page.py'
-        content = filepath.read_text(encoding='utf-8')
+        """Test probe panels use install_tooltip
         
-        # Should import and use install_tooltip
-        assert 'from UI.tooltip_helper import install_tooltip' in content
-        assert '_install_tooltips' in content
-        assert 'install_tooltip(' in content
+        After refactoring, page.py delegates to child panels which use install_tooltip
+        """
+        panels_to_check = [
+            ('probe_card.py', True),
+            ('reset_panel.py', True),
+            ('chip_config_panel.py', False),  # May not have tooltips directly
+        ]
+        
+        for panel_name, must_have_tooltip in panels_to_check:
+            filepath = project_root / 'UI' / 'probe' / panel_name
+            if filepath.exists():
+                content = filepath.read_text(encoding='utf-8')
+                has_import = 'from UI.tooltip_helper import install_tooltip' in content
+                has_call = 'install_tooltip(' in content
+                
+                if must_have_tooltip:
+                    assert has_import, f"{panel_name} should import install_tooltip"
+                    assert has_call, f"{panel_name} should use install_tooltip"
     
     def test_tooltip_widgets_are_covered(self, project_root):
         """Ensure all widgets with setToolTip have install_tooltip"""

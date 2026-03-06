@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.4] - 2026-03-06
+
+### Added
+
+#### Architecture Improvements
+- **Worker Module Independence** - Extracted `FlashWorker` and `EraseWorker` to `UI/workers/` package
+  - Impact: Better separation of concerns, workers can be reused and tested independently
+  - Files: `UI/workers/__init__.py`, `UI/workers/flash_worker.py`, `UI/workers/erase_worker.py`
+
+- **Flash Info Pure Functions** - New `Core/flash_info.py` module with `resolve_flash_info()`
+  - Impact: Flash parameter resolution logic is now testable without Qt dependencies
+  - Simplifies `erase_page.apply_chip_config()` from ~90 lines to ~30 lines
+
+- **Module Entry Point** - Added `__main__.py` for `python -m arm_flash_tool` support
+  - Impact: Standard Python module invocation pattern
+
+- **threading.Event for Cancellation** - Workers now use `threading.Event` instead of boolean flag
+  - Impact: More explicit semantics, compatible with ThreadPoolExecutor migration
+
+#### Code Quality
+- **Modern Type Annotations** - 6 core files now use `from __future__ import annotations`
+  - Using `X | None` syntax instead of `Optional[X]`
+  - Files: chip_config.py, flash_info.py, erase_page.py, flash_page.py, flash_worker.py, erase_worker.py
+
+#### Testing
+- **test_flash_info.py** - 24 new test cases covering FlashInfo dataclass and resolve functions
+  - Total tests: 233 (up from 209)
+
+#### Documentation
+- **CONTRIBUTING.md** - Complete development guide with environment setup, project structure, testing guide
+
+### Fixed
+- **pyproject.toml packages** - Added `UI.workers` to packages list, fixing `pip install .` issue
+
+### Technical Details
+- Files added: 5 new files
+- Files modified: 11 files
+- Test count: 209 → 233 (+24)
+- Code reduction: erase_page.py -3.1 KB
+
+---
+
 ## [1.8.3] - 2026-01-22
 
 ### Fixed

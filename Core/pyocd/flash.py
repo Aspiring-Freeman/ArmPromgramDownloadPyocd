@@ -66,6 +66,15 @@ class FlashMixin:
             command_logger.log(f"   Reset after: {not no_reset}")
             if base_address is not None:
                 command_logger.log(f"   Base address: 0x{base_address:08X}")
+            
+            # Halt target before programming to ensure clean state
+            try:
+                target = self._session.target
+                if not target.is_halted():
+                    command_logger.log(f"   Halting target before flash...")
+                    target.halt()
+            except Exception as halt_err:
+                LOG.warning(f"Failed to halt target before flash: {halt_err}")
                 
             programmer = FileProgrammer(
                 self._session,

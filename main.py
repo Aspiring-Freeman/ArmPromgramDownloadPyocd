@@ -214,37 +214,36 @@ def get_custom_pyocd_path() -> str:
     return ""
 
 
-# Check PyOCD availability before proceeding
-if not check_pyocd_submodule():
-    print("Cannot start application without PyOCD. Exiting.")
-    sys.exit(1)
+def _setup_pyocd_path() -> bool:
+    """
+    Setup PyOCD path and verify availability.
+    
+    Returns:
+        True if PyOCD is available, False otherwise.
+    """
+    if not check_pyocd_submodule():
+        print("Cannot start application without PyOCD. Exiting.")
+        return False
+    return True
 
-# Check other dependencies
-if not check_dependencies():
-    print("Missing required dependencies. Exiting.")
-    sys.exit(1)
 
-# Add project root for Core and UI modules
-sys.path.insert(0, str(PROJECT_ROOT))
-
-# High DPI support - must be set before QApplication creation
-os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
-os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
-
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QFont
-
-from qfluentwidgets import FluentTranslator
-
-from Core.pyocd_wrapper import PyOCDWrapper
-from Core.config import ConfigManager, get_config_path
-from Core.logger import setup_logger
-from UI.main_window import MainWindow
+def _setup_dependencies() -> bool:
+    """
+    Verify all required dependencies are available.
+    
+    Returns:
+        True if all dependencies are satisfied, False otherwise.
+    """
+    if not check_dependencies():
+        print("Missing required dependencies. Exiting.")
+        return False
+    return True
 
 
 def setup_high_dpi():
     """Setup high DPI support"""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
@@ -271,6 +270,33 @@ def get_pack_files() -> list:
 
 def main():
     """Main entry point"""
+    # Check PyOCD availability before proceeding
+    if not _setup_pyocd_path():
+        return 1
+    
+    # Check other dependencies
+    if not _setup_dependencies():
+        return 1
+    
+    # Add project root for Core and UI modules
+    sys.path.insert(0, str(PROJECT_ROOT))
+    
+    # High DPI support - must be set before QApplication creation
+    os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+    os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
+    
+    # Import Qt and UI modules after PyOCD and dependencies are verified
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtGui import QFont
+    
+    from qfluentwidgets import FluentTranslator
+    
+    from Core.pyocd_wrapper import PyOCDWrapper
+    from Core.config import ConfigManager, get_config_path
+    from Core.logger import setup_logger
+    from UI.main_window import MainWindow
+    
     # Environment checks
     check_virtual_env()
     check_pyocd_version()
